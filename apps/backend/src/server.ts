@@ -1,6 +1,7 @@
 import Fastify, { type FastifyInstance, type FastifyRequest } from "fastify";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
+import formbody from "@fastify/formbody";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { initServer } from "@ts-rest/fastify";
@@ -33,6 +34,7 @@ export async function buildServer(): Promise<FastifyInstance> {
   const app = Fastify({ logger: { level: env.isProd ? "info" : "info" }, trustProxy: true, bodyLimit: 6 * 1024 * 1024 });
 
   await app.register(cookie);
+  await app.register(formbody);
   await app.register(multipart, { limits: { fileSize: MAX_RESUME_BYTES, files: 1 } });
 
   if (env.corsOrigins.length > 0) {
@@ -78,9 +80,31 @@ export async function buildServer(): Promise<FastifyInstance> {
 
   app.get("/api/health", async () => ({ ok: true, service: "scottylabs-invites-api" }));
 
-  // Magic-link click-through: verify, set cookie, bounce to the app.
+  // Magic-link click-through. The GET renders a confirmation page and never
+  // touches the database — email security scanners prefetch GET links, and a
+  // consuming GET would burn the link (and its paired 6-digit code) before
+  // the person ever sees it. Only the explicit POST consumes the token.
   app.get("/api/auth/callback", async (request, reply) => {
     const token = (request.query as { token?: string }).token;
+    if (!token) return reply.redirect(`${env.appUrl}/signin?error=missing_token`);
+    const safeToken = token.replace(/[^A-Za-z0-9_-]/g, "");
+    reply.header("Content-Type", "text/html; charset=utf-8");
+    reply.header("Cache-Control", "no-store");
+    return reply.send(`<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="robots" content="noindex"><title>Sign in — ScottyLabs Invites</title></head>
+<body style="margin:0;background:#f0f4f8;font-family:Inter,Helvetica,Arial,sans-serif;display:flex;align-items:flex-start;justify-content:center;min-height:100vh">
+<div style="margin-top:12vh;width:100%;max-width:400px;background:#fff;border:1px solid #c7d2dc;border-radius:16px;box-shadow:0 2px 8px rgba(30,30,30,0.08);padding:32px 28px;text-align:center;box-sizing:border-box">
+<div style="font-size:17px;font-weight:700;letter-spacing:-0.02em;color:#1e1e1e">ScottyLabs Invites</div>
+<p style="margin:14px 0 0;font-size:14px;line-height:1.55;color:#5f6f7f">One click to confirm it's really you — then you're signed in on this device.</p>
+<form method="POST" action="/api/auth/callback" style="margin:20px 0 0">
+<input type="hidden" name="token" value="${safeToken}">
+<button type="submit" style="width:100%;border:none;cursor:pointer;background:#0e96d1;color:#fff;font-size:15px;font-weight:600;font-family:inherit;padding:13px 0;border-radius:100px">Continue to ScottyLabs Invites</button>
+</form>
+<p style="margin:16px 0 0;font-size:11.5px;color:#7a8fa3">Didn't request this email? You can close this page.</p>
+</div></body></html>`);
+  });
+
+  app.post("/api/auth/callback", async (request, reply) => {
+    const token = (request.body as { token?: string } | undefined)?.token;
     if (!token) return reply.redirect(`${env.appUrl}/signin?error=missing_token`);
     const result = await verifyByToken(token);
     if (!result) return reply.redirect(`${env.appUrl}/signin?error=expired`);
