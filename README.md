@@ -75,10 +75,14 @@ cd apps/web && pnpm dev
   `GET /api/tickets/:id/google-wallet` (fat Save-to-Wallet JWT) are fully implemented and
   activate when the `APPLE_PASS_*` / `GOOGLE_WALLET_*` env vars are configured; until then
   they return a friendly 503 the UI surfaces inline.
-- **MCP** (`APP_MODE=mcp`): streamable-HTTP server with the same email-code auth
-  (`start_sign_in` → `verify_code` mints a committee-scoped `mcp_tokens` row; supers get
-  `scope=all`) or `Authorization: Bearer <token>`. Tools: `list_events`, `guest_list`,
-  `pending_reviews`, `export_csv`, `whoami`. Tokens are listed/revocable in the Admin portal.
+- **MCP** (`APP_MODE=mcp`): streamable-HTTP server secured with **OAuth 2.1** per the MCP
+  auth spec — clients hit a 401 challenge, discover the authorization server via RFC 9728,
+  dynamically register (RFC 7591), and send the user to `invite.scottylabs.org` to approve
+  in the browser (rides the normal app session; sign-in is the same email code). Tokens are
+  authorization-code + PKCE with refresh rotation (7-day access / 90-day refresh), stored
+  hashed in `mcp_tokens`, committee-scoped (`scope=all` for supers), require the owner to
+  still be an admin on every request, and are listed/revocable in the Admin portal. Tools:
+  `list_events`, `guest_list`, `pending_reviews`, `export_csv`, `whoami`.
 - **CSV export**: `GET /api/org/events/:id/export.csv` — standard columns plus one column
   per custom/phone/t-shirt question, BOM + formula-injection-safe.
 - **Calendars**: `GET /api/calendar.ics` (all listed events), per-event `.ics`, and a

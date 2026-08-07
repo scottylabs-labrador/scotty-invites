@@ -3,13 +3,14 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { and, asc, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db, schema } from "../db/client";
 import { env } from "../env";
-import { newToken, sha256 } from "../lib/crypto";
-import { startAuth, consumeCode, findAdminByEmail } from "../auth/service";
+import { sha256 } from "../lib/crypto";
+import { findAdminByEmail } from "../auth/service";
 import { toCsv } from "../lib/csv";
 import { fmtLongDate, fmtTimeRange } from "../lib/format";
+import { authServerMetadata } from "../oauth/routes";
 
 interface McpAuth {
   email: string;
@@ -17,6 +18,11 @@ interface McpAuth {
   scopeName: string;
 }
 
+/**
+ * Validates a bearer token on every request: hash lookup, not revoked, not
+ * expired, and the owner must still be an organizer — revoking an admin in
+ * the portal cuts their MCP access immediately, not at token expiry.
+ */
 async function authFromBearer(header: string | undefined): Promise<McpAuth | null> {
   if (!header?.startsWith("Bearer ")) return null;
   const token = header.slice(7).trim();
@@ -27,7 +33,14 @@ async function authFromBearer(header: string | undefined): Promise<McpAuth | nul
     .where(and(eq(schema.mcpTokens.tokenHash, sha256(token)), isNull(schema.mcpTokens.revokedAt)));
   const row = rows[0];
   if (!row) return null;
-  void db.update(schema.mcpTokens).set({ lastUsedAt: new Date() }).where(eq(schema.mcpTokens.id, row.id)).execute();
+  if (row.expiresAt && row.expiresAt < new Date()) return null;
+
+  const admin = await findAdminByEmail(row.email);
+  if (!admin) return null;
+
+  if (!row.lastUsedAt || Date.now() - row.lastUsedAt.getTime() > 60_000) {
+    void db.update(schema.mcpTokens).set({ lastUsedAt: new Date() }).where(eq(schema.mcpTokens.id, row.id)).execute();
+  }
   const scopeName =
     row.scope === "all"
       ? "All committees"
@@ -58,65 +71,24 @@ async function findScopedEvent(auth: McpAuth, ref: string) {
   );
 }
 
-function buildMcpServer(session: { auth: McpAuth | null; clientName: string | null }) {
+function buildMcpServer(session: { auth: McpAuth | null }) {
   const server = new McpServer(
-    { name: "scottylabs-invites", version: "1.0.0" },
+    { name: "scottylabs-invites", version: "1.1.0" },
     {
       instructions:
-        "Guest-data access for ScottyLabs Invites organizers. If you have a token, connect with Authorization: Bearer <token>. Otherwise call start_sign_in with your admin email, read the 6-digit code from your inbox (sent via Mailgun), then verify_code — that mints a committee-scoped token and unlocks the data tools.",
+        "Guest-data access for ScottyLabs Invites organizers. Authorization is OAuth: your MCP client opens invite.scottylabs.org in the browser, you sign in (CMU email code) and approve once, and the client keeps the token — revocable any time from Admin → MCP data access.",
     },
   );
 
   const requireAuth = (): McpAuth => {
     if (!session.auth) {
-      throw new Error("Not signed in. Call start_sign_in with your admin email, then verify_code with the 6-digit code we emailed you.");
+      throw new Error("Not authorized — reconnect and approve access in the browser when prompted.");
     }
     return session.auth;
   };
 
-  server.tool(
-    "start_sign_in",
-    "Begin email verification for MCP access. Sends a 6-digit code (via Mailgun) to an organizer email that has admin rights.",
-    { email: z.string().email().describe("Your organizer email") },
-    async ({ email }) => {
-      const admin = await findAdminByEmail(email.toLowerCase());
-      if (!admin) return text(`${email} isn't an organizer on ScottyLabs Invites. Ask a super admin for an invite first.`);
-      const result = await startAuth({ email, keepSignedIn: false, ip: "mcp" });
-      if (!result.ok) return text(result.message);
-      return text(`Code sent to ${email} — check your inbox, then call verify_code with the 6 digits.`);
-    },
-  );
-
-  server.tool(
-    "verify_code",
-    "Finish email verification: mints a committee-scoped MCP token and signs this session in. Save the token for future connections (Authorization: Bearer <token>).",
-    { email: z.string().email(), code: z.string().regex(/^\d{6}$/) },
-    async ({ email, code }) => {
-      const result = await consumeCode(email, code);
-      if ("error" in result) return text(result.message);
-      const admin = await findAdminByEmail(email.toLowerCase());
-      if (!admin) return text("That email verified, but it isn't an organizer. Ask a super admin for an invite.");
-      const scope = admin.admin.role === "super_admin" ? "all" : admin.admin.committeeId;
-      const raw = newToken();
-      await db.insert(schema.mcpTokens).values({
-        tokenHash: sha256(raw),
-        email: email.toLowerCase(),
-        scope,
-        label: session.clientName,
-      });
-      session.auth = {
-        email: email.toLowerCase(),
-        scope,
-        scopeName: admin.admin.role === "super_admin" ? "All committees" : admin.committee.name,
-      };
-      return text(
-        `Signed in as ${email} (scope: ${session.auth.scopeName}).\n\nYour MCP token (save it — shown once):\n${raw}\n\nReconnect any time with header  Authorization: Bearer ${raw}`,
-      );
-    },
-  );
-
-  server.tool("whoami", "Show the signed-in organizer and committee scope for this session.", {}, async () => {
-    if (!session.auth) return text("Not signed in — call start_sign_in first (or reconnect with a Bearer token).");
+  server.tool("whoami", "Show the signed-in organizer and committee scope for this connection.", {}, async () => {
+    if (!session.auth) return text("Not authorized — reconnect and approve access in the browser.");
     return text(`${session.auth.email} · scope: ${session.auth.scopeName}`);
   });
 
@@ -230,11 +202,11 @@ function buildMcpServer(session: { auth: McpAuth | null; clientName: string | nu
 }
 
 // ---------------------------------------------------------------------------
-// HTTP plumbing (streamable transport, session per client)
+// HTTP plumbing — streamable transport + OAuth resource-server behavior
 // ---------------------------------------------------------------------------
 
 const transports = new Map<string, StreamableHTTPServerTransport>();
-const sessions = new Map<string, { auth: McpAuth | null; clientName: string | null }>();
+const sessions = new Map<string, { auth: McpAuth | null }>();
 
 function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolvePromise, reject) => {
@@ -257,23 +229,72 @@ function readBody(req: IncomingMessage): Promise<unknown> {
 }
 
 export async function startMcpServer(port: number): Promise<void> {
+  const mcpOrigin = new URL(env.mcpUrl).origin;
+  const resourceMetadata = {
+    resource: env.mcpUrl,
+    authorization_servers: [env.appUrl],
+    bearer_methods_supported: ["header"],
+    resource_name: "ScottyLabs Invites guest data",
+  };
+
+  const sendJson = (res: ServerResponse, status: number, body: unknown, headers: Record<string, string> = {}) => {
+    res.writeHead(status, {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, mcp-session-id, mcp-protocol-version, last-event-id",
+      "Access-Control-Expose-Headers": "mcp-session-id, WWW-Authenticate",
+      ...headers,
+    });
+    res.end(JSON.stringify(body));
+  };
+
+  const challenge = (res: ServerResponse) =>
+    sendJson(
+      res,
+      401,
+      { error: "unauthorized", error_description: "Authorize this client to access ScottyLabs Invites guest data." },
+      { "WWW-Authenticate": `Bearer resource_metadata="${mcpOrigin}/.well-known/oauth-protected-resource"` },
+    );
+
   const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? "/", "http://localhost");
     res.setHeader("X-Content-Type-Options", "nosniff");
 
+    if (req.method === "OPTIONS") {
+      sendJson(res, 204, {});
+      return;
+    }
+
+    // OAuth discovery (RFC 9728 on this host; AS metadata mirrored for older clients).
+    if (url.pathname === "/.well-known/oauth-protected-resource" || url.pathname === "/.well-known/oauth-protected-resource/mcp") {
+      sendJson(res, 200, resourceMetadata);
+      return;
+    }
+    if (url.pathname === "/.well-known/oauth-authorization-server" || url.pathname === "/.well-known/openid-configuration") {
+      sendJson(res, 200, authServerMetadata());
+      return;
+    }
+
     if (url.pathname === "/health" || (url.pathname === "/" && req.method === "GET")) {
-      res.writeHead(200, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ ok: true, service: "scottylabs-invites-mcp", connect: `${env.mcpUrl}` }));
+      sendJson(res, 200, { ok: true, service: "scottylabs-invites-mcp", connect: env.mcpUrl, auth: "oauth" });
       return;
     }
 
     if (url.pathname !== "/mcp") {
-      res.writeHead(404, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "not_found" }));
+      sendJson(res, 404, { error: "not_found" });
       return;
     }
 
     try {
+      // Every /mcp request must carry a valid bearer token; the 401 challenge
+      // is what makes clients kick off the browser authorization flow.
+      const auth = await authFromBearer(req.headers.authorization);
+      if (!auth) {
+        challenge(res);
+        return;
+      }
+
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
       if (req.method === "POST") {
@@ -281,18 +302,13 @@ export async function startMcpServer(port: number): Promise<void> {
         let transport = sessionId ? transports.get(sessionId) : undefined;
 
         if (!transport) {
-          const sessionState: { auth: McpAuth | null; clientName: string | null } = {
-            auth: await authFromBearer(req.headers.authorization),
-            clientName: null,
-          };
+          const sessionState: { auth: McpAuth | null } = { auth };
           const server = buildMcpServer(sessionState);
           transport = new StreamableHTTPServerTransport({
             sessionIdGenerator: () => randomUUID(),
             onsessioninitialized: (id: string) => {
               transports.set(id, transport!);
               sessions.set(id, sessionState);
-              const client = server.server.getClientVersion();
-              if (client?.name) sessionState.clientName = client.name;
             },
           });
           transport.onclose = () => {
@@ -303,11 +319,8 @@ export async function startMcpServer(port: number): Promise<void> {
           };
           await server.connect(transport);
         } else if (sessionId) {
-          // Refresh bearer auth on reconnects that carry a token.
           const state = sessions.get(sessionId);
-          if (state && !state.auth) {
-            state.auth = await authFromBearer(req.headers.authorization);
-          }
+          if (state) state.auth = auth; // freshest token wins (rotation, re-auth)
         }
 
         await transport.handleRequest(req, res, body);
@@ -324,17 +337,13 @@ export async function startMcpServer(port: number): Promise<void> {
         return;
       }
 
-      res.writeHead(405, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "method_not_allowed" }));
+      sendJson(res, 405, { error: "method_not_allowed" });
     } catch (err) {
       console.error("[mcp] request error:", err);
-      if (!res.headersSent) {
-        res.writeHead(500, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ error: "internal" }));
-      }
+      if (!res.headersSent) sendJson(res, 500, { error: "internal" });
     }
   });
 
   await new Promise<void>((resolvePromise) => httpServer.listen(port, "0.0.0.0", resolvePromise));
-  console.log(`[mcp] ScottyLabs Invites MCP listening on :${port} (endpoint /mcp)`);
+  console.log(`[mcp] ScottyLabs Invites MCP listening on :${port} (endpoint /mcp, auth: OAuth via ${env.appUrl})`);
 }

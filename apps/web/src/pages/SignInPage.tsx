@@ -8,12 +8,48 @@ import logo from "../assets/scottylabs-logo.svg";
 
 type Phase = "email" | "code" | "signed-in";
 
+const REDIRECT_KEY = "sl_invites_pending_redirect";
+
+/** Where to land after sign-in. Survives the email-link-opens-a-new-tab path
+ *  (e.g. the MCP OAuth consent flow) via a short-lived localStorage stash. */
+function usePendingRedirect(toParam: string | null): string {
+  if (toParam) {
+    try {
+      localStorage.setItem(REDIRECT_KEY, JSON.stringify({ to: toParam, at: Date.now() }));
+    } catch {
+      /* private mode */
+    }
+    return toParam;
+  }
+  try {
+    const raw = localStorage.getItem(REDIRECT_KEY);
+    if (raw) {
+      const stored = JSON.parse(raw) as { to?: string; at?: number };
+      if (stored.to?.startsWith("/") && Date.now() - (stored.at ?? 0) < 10 * 60 * 1000) return stored.to;
+    }
+  } catch {
+    /* ignore */
+  }
+  return "/";
+}
+
 export default function SignInPage() {
   const { me, refresh } = useAuth();
   const navigate = useNavigate();
   const [params] = useSearchParams();
-  const redirectTo = params.get("to") ?? "/";
+  const redirectTo = usePendingRedirect(params.get("to"));
   const transferToken = params.get("transfer") ?? undefined;
+
+  const continueLabel = redirectTo.startsWith("/api/oauth") ? "Continue to authorization" : "Continue to events";
+  function continueOn() {
+    try {
+      localStorage.removeItem(REDIRECT_KEY);
+    } catch {
+      /* ignore */
+    }
+    if (redirectTo.startsWith("/api/")) window.location.assign(redirectTo);
+    else navigate(redirectTo);
+  }
 
   const [phase, setPhase] = useState<Phase>("email");
   const [email, setEmail] = useState("");
@@ -309,8 +345,8 @@ export default function SignInPage() {
               <p style={{ margin: "14px 0 0", fontSize: 13, lineHeight: 1.55, color: "var(--muted-2)", textWrap: "pretty" }}>
                 A secure cookie keeps this device signed in for 30 days. Sign in with the same email anywhere — it's always the same account, tickets included.
               </p>
-              <button className="pill pill-blue" style={{ width: "100%", marginTop: 20, fontSize: 15, padding: "13px 0" }} onClick={() => navigate(redirectTo)}>
-                Continue to events
+              <button className="pill pill-blue" style={{ width: "100%", marginTop: 20, fontSize: 15, padding: "13px 0" }} onClick={continueOn}>
+                {continueLabel}
               </button>
               <button className="pill pill-outline pill-outline-danger" style={{ width: "100%", marginTop: 10, fontSize: 14, padding: "11px 0" }} onClick={() => void signOut()}>
                 Sign out

@@ -268,9 +268,37 @@ export const mcpTokens = pgTable("mcp_tokens", {
   email: citext("email").notNull(),
   scope: text("scope").notNull(), // "all" or a committee id
   label: text("label"),
+  clientId: text("client_id"),
+  refreshTokenHash: text("refresh_token_hash"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }),
+  refreshExpiresAt: timestamp("refresh_expires_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});
+
+/** OAuth 2.1 public clients (dynamic registration, RFC 7591). */
+export const oauthClients = pgTable("oauth_clients", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  clientId: text("client_id").notNull().unique(),
+  name: text("name").notNull(),
+  redirectUris: jsonb("redirect_uris").$type<string[]>().notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Short-lived authorization codes (PKCE-bound, single use). */
+export const oauthCodes = pgTable("oauth_codes", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  codeHash: text("code_hash").notNull().unique(),
+  clientId: text("client_id").notNull(),
+  redirectUri: text("redirect_uri").notNull(),
+  codeChallenge: text("code_challenge").notNull(),
+  email: citext("email").notNull(),
+  scope: text("scope").notNull(), // "all" or a committee id
+  resource: text("resource"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  consumedAt: timestamp("consumed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 export const files = pgTable("files", {

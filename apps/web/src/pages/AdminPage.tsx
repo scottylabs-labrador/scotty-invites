@@ -299,7 +299,7 @@ export default function AdminPage() {
               <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow-sm)", padding: "20px 24px" }}>
                 <div style={{ fontFamily: "var(--font-brand)", fontSize: 17, fontWeight: 700, color: "var(--text)" }}>MCP data access</div>
                 <div style={{ fontSize: 12, color: "var(--muted-3)", marginTop: 4, lineHeight: 1.5 }}>
-                  Connect Claude — or any MCP client — to live guest data. Auth is the same email-code flow; tokens are scoped to your committee.
+                  Connect Claude — or any MCP client — to live guest data. Adding the URL opens your browser to sign in and approve once; the client stays signed in with a committee-scoped token.
                 </div>
                 <div className="mono" style={{ display: "flex", alignItems: "center", fontSize: 12, color: "#38424b", background: "var(--canvas-muted)", border: "1px solid #d9e1e7", borderRadius: 6, padding: "9px 12px", marginTop: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                   {d.mcp.url.replace(/^https?:\/\//, "")}

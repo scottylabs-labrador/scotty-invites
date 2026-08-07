@@ -13,6 +13,7 @@ import { env } from "./env";
 import { router, contract, setSessionCookie, deriveLocationShort } from "./routes/router";
 import { resolveSession, verifyByToken, type AuthContext } from "./auth/service";
 import { buildIcs, googleCalendarUrl } from "./lib/ics";
+import { registerOauthRoutes } from "./oauth/routes";
 import { toCsv } from "./lib/csv";
 import { buildPkpass } from "./lib/wallet/apple";
 
@@ -44,10 +45,15 @@ export async function buildServer(): Promise<FastifyInstance> {
   app.decorateRequest("authCtx", null);
 
   // Session resolution + CSRF origin check for API routes.
+  // The two token-machine OAuth endpoints are exempt from the origin check:
+  // they carry no cookies (PKCE + client binding protect them) and legitimate
+  // MCP clients call them cross-origin.
+  const ORIGIN_CHECK_EXEMPT = ["/api/oauth/token", "/api/oauth/register"];
   app.addHook("onRequest", async (request, reply) => {
     if (!request.url.startsWith("/api")) return;
 
-    if (!["GET", "HEAD", "OPTIONS"].includes(request.method)) {
+    const path = request.url.split("?")[0];
+    if (!["GET", "HEAD", "OPTIONS"].includes(request.method) && !ORIGIN_CHECK_EXEMPT.includes(path)) {
       const origin = request.headers.origin;
       if (origin) {
         const allowed = new Set([env.appUrl, env.apiUrl, ...env.corsOrigins]);
@@ -75,6 +81,9 @@ export async function buildServer(): Promise<FastifyInstance> {
   // ---------------------------------------------------------------- ts-rest
   const s = initServer();
   await app.register(s.plugin(router));
+
+  // ---------------------------------------------------------------- OAuth (MCP)
+  await registerOauthRoutes(app);
 
   // ---------------------------------------------------------------- plain routes
 
