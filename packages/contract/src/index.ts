@@ -604,6 +604,11 @@ export const contract = c.router(
           404: ErrorBody,
         },
       },
+      deleteEvent: {
+        method: "DELETE",
+        path: "/api/org/events/:id",
+        responses: { 200: z.object({ ok: z.literal(true) }), 400: ErrorBody, 401: ErrorBody, 403: ErrorBody, 404: ErrorBody },
+      },
       updateEvent: {
         method: "PATCH",
         path: "/api/org/events/:id",

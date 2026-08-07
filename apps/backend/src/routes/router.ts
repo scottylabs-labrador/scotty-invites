@@ -795,6 +795,43 @@ export const router = s.router(contract, {
       return { status: 200, body: { ok: true, promoted: result.promoted } };
     },
 
+    deleteEvent: async ({ params, request }) => {
+      const ctx = ctxOf(request);
+      if (!ctx) return unauthorized;
+      if (!ctx.admin) return forbidden;
+      const scoped = await loadScopedEvent(ctx, params.id);
+      if (scoped === null) return { status: 404, body: { error: "not_found", message: "Event not found" } };
+      if (scoped === "forbidden") return forbidden;
+
+      const regCount = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(schema.registrations)
+        .where(eq(schema.registrations.eventId, params.id));
+      if ((regCount[0]?.count ?? 0) > 0 && ctx.admin.row.role !== "super_admin") {
+        return {
+          status: 400,
+          body: { error: "has_signups", message: "This event already has signups — only a super admin can delete it." },
+        };
+      }
+
+      await db.transaction(async (tx) => {
+        const regIds = (
+          await tx.select({ id: schema.registrations.id }).from(schema.registrations).where(eq(schema.registrations.eventId, params.id))
+        ).map((r) => r.id);
+        const ticketIds = (
+          await tx.select({ id: schema.tickets.id }).from(schema.tickets).where(eq(schema.tickets.eventId, params.id))
+        ).map((t) => t.id);
+        if (regIds.length) await tx.delete(schema.answers).where(inArray(schema.answers.registrationId, regIds));
+        if (ticketIds.length) await tx.delete(schema.ticketTransfers).where(inArray(schema.ticketTransfers.ticketId, ticketIds));
+        await tx.delete(schema.checkins).where(eq(schema.checkins.eventId, params.id));
+        await tx.delete(schema.tickets).where(eq(schema.tickets.eventId, params.id));
+        await tx.delete(schema.registrations).where(eq(schema.registrations.eventId, params.id));
+        await tx.delete(schema.eventQuestions).where(eq(schema.eventQuestions.eventId, params.id));
+        await tx.delete(schema.events).where(eq(schema.events.id, params.id));
+      });
+      return { status: 200, body: { ok: true } };
+    },
+
     updateEvent: async ({ params, body, request }) => {
       const ctx = ctxOf(request);
       if (!ctx) return unauthorized;
