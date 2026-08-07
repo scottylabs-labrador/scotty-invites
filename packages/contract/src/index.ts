@@ -403,6 +403,11 @@ export const CreateEventBody = z.object({
 });
 export type CreateEventBody = z.infer<typeof CreateEventBody>;
 
+export const UpdateEventBody = CreateEventBody.omit({ committeeId: true, captures: true, hostQuestions: true }).partial().extend({
+  status: z.enum(["draft", "published", "cancelled"]).optional(),
+});
+export type UpdateEventBody = z.infer<typeof UpdateEventBody>;
+
 // ---------------------------------------------------------------------------
 // Admin portal
 // ---------------------------------------------------------------------------
@@ -598,6 +603,12 @@ export const contract = c.router(
           403: ErrorBody,
           404: ErrorBody,
         },
+      },
+      updateEvent: {
+        method: "PATCH",
+        path: "/api/org/events/:id",
+        body: UpdateEventBody,
+        responses: { 200: z.object({ ok: z.literal(true) }), 400: ErrorBody, 401: ErrorBody, 403: ErrorBody, 404: ErrorBody },
       },
       createEvent: {
         method: "POST",

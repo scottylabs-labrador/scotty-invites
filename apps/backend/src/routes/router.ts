@@ -28,7 +28,7 @@ import {
   claimTransfer,
   checkinBySerial,
   approvedCount,
-  eventEmailInfo,
+  promoteWaitlist,
 } from "../services/registrations";
 import { ensureTransfer, revokeTransfer, parseTransferToken, transferUrl } from "../services/transfers";
 import { getQuestionControls, setQuestionControl } from "../services/settings";
@@ -793,6 +793,42 @@ export const router = s.router(contract, {
       const result = await declineRegistration(params.id);
       if (!result.ok) return { status: 404, body: { error: "decline", message: result.message ?? "Couldn't decline" } };
       return { status: 200, body: { ok: true, promoted: result.promoted } };
+    },
+
+    updateEvent: async ({ params, body, request }) => {
+      const ctx = ctxOf(request);
+      if (!ctx) return unauthorized;
+      if (!ctx.admin) return forbidden;
+      const scoped = await loadScopedEvent(ctx, params.id);
+      if (scoped === null) return { status: 404, body: { error: "not_found", message: "Event not found" } };
+      if (scoped === "forbidden") return forbidden;
+
+      const patch: Partial<typeof schema.events.$inferInsert> = {};
+      if (body.title !== undefined) patch.title = body.title;
+      if (body.description !== undefined) patch.description = body.description;
+      if (body.category !== undefined) patch.category = body.category;
+      if (body.audience !== undefined) patch.audience = body.audience;
+      if (body.model !== undefined) patch.model = body.model;
+      if (body.capacity !== undefined) patch.capacity = body.capacity;
+      if (body.startAt !== undefined) patch.startAt = new Date(body.startAt);
+      if (body.endAt !== undefined) patch.endAt = new Date(body.endAt);
+      if (body.location !== undefined) patch.location = body.location;
+      if (body.locationShort !== undefined) patch.locationShort = body.locationShort;
+      if (body.artwork !== undefined) patch.artwork = body.artwork;
+      if (body.passStyle !== undefined) patch.passStyle = body.passStyle;
+      if (body.stampCommittee !== undefined) patch.stampCommittee = body.stampCommittee;
+      if (body.allowPlusOne !== undefined) patch.allowPlusOne = body.allowPlusOne;
+      if (body.flagship !== undefined) patch.flagship = body.flagship;
+      if (body.updatesEmail !== undefined) patch.updatesEmail = body.updatesEmail;
+      if (body.contactEmail !== undefined) patch.contactEmail = body.contactEmail;
+      if (body.digest !== undefined) patch.digest = body.digest;
+      if (body.status !== undefined) patch.status = body.status;
+      if (body.model !== undefined) patch.listed = body.model !== "invite";
+
+      if (Object.keys(patch).length === 0) return { status: 400, body: { error: "empty", message: "Nothing to update." } };
+      await db.update(schema.events).set(patch).where(eq(schema.events.id, params.id));
+      if (patch.capacity !== undefined || patch.model !== undefined) await promoteWaitlist(params.id);
+      return { status: 200, body: { ok: true } };
     },
 
     createEvent: async ({ body, request }) => {
