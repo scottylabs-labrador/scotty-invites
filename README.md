@@ -7,13 +7,19 @@ organizer dashboards, door check-in, committee-scoped admin tools, and MCP data 
 Built from the design handoff in `design_handoff_scottylabs_invites/` (see `HANDOFF.md` +
 `README.md` there — the `.dc.html` files are the pixel spec).
 
-## Live (Foundry Committee Deploy Sandbox on Railway)
+## Live
 
 | What | URL |
 | --- | --- |
-| App (SPA + API) | https://invites-app-production.up.railway.app |
-| MCP server | https://invites-mcp-production.up.railway.app/mcp |
+| App (SPA + API) | https://invite.scottylabs.org |
+| MCP server | https://mcp.invite.scottylabs.org/mcp |
 | Health | `/api/health` on the app, `/health` on MCP |
+
+Hosted in the **Foundry Committee Deploy Sandbox** Railway project (services
+`invites-app` + `invites-mcp` + a dedicated Postgres). DNS is Cloudflare CNAMEs
+(DNS-only / grey cloud — `mcp.invite` must stay grey since the free universal cert
+doesn't cover second-level subdomains) pointing at Railway's per-domain targets; the
+generated `*.up.railway.app` domains still work as fallbacks.
 
 Seeded super admin: `thomas@velroi.com` (domain-exempt). Sign in at `/signin` — a Mailgun
 email delivers a 6-digit code and a scanner-safe magic link.
@@ -94,10 +100,10 @@ cd apps/web && pnpm dev
 
 Two Railway services build from the same root `Dockerfile`; `invites-mcp` just sets
 `APP_MODE=mcp`. Migrations + idempotent seeds run on boot. The SPA is served by the API
-(single origin) so session cookies stay first-party on `*.up.railway.app` — when real
-domains exist (`invite.scottylabs.org` + `api.invite.scottylabs.org`), set `APP_URL`,
-`API_URL`, `COOKIE_DOMAIN=.invite.scottylabs.org` and `CORS_ORIGINS` and the split-domain
-topology from HANDOFF §3 works unchanged.
+(single origin at `invite.scottylabs.org`) so session cookies stay first-party. If the
+web app is ever split out to its own host (`api.invite.scottylabs.org` topology from
+HANDOFF §3), set `APP_URL`, `API_URL`, `COOKIE_DOMAIN=.invite.scottylabs.org` and
+`CORS_ORIGINS` — the code already supports it.
 
 Key env vars: `DATABASE_URL`, `MAILGUN_API_KEY/DOMAIN/FROM_EMAIL/REGION` (`MAIL_MODE=console`
 for dev), `SEED_SUPER_ADMIN_EMAILS`, `TRANSFER_LINK_SECRET`, `APP_URL`, `API_URL`,
