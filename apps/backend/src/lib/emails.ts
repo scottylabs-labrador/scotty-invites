@@ -91,15 +91,17 @@ ${button(opts.link, "Sign in")}
 
 export function adminInviteEmail(opts: { committeeName: string; role: string; invitedBy: string }) {
   const roleLabel = opts.role === "super_admin" ? "super admin" : "admin";
+  const label = `${opts.committeeName} ${roleLabel}`;
+  const article = /^[aeiou]/i.test(label) ? "an" : "a";
   const inner = `${h1("You're invited to organize")}
-${p(`${escapeHtml(opts.invitedBy)} added you as a <b>${escapeHtml(opts.committeeName)}</b> ${roleLabel} on ScottyLabs Invites — the event signup system for ScottyLabs.`)}
+${p(`${escapeHtml(opts.invitedBy)} added you as ${article} <b>${escapeHtml(opts.committeeName)}</b> ${roleLabel} on ScottyLabs Invites — the event signup system for ScottyLabs.`)}
 ${p("Sign in with this email address and the Organize tab unlocks: create events, review requests, and run door check-in.")}
 ${button(`${env.appUrl}/signin`, "Sign in to get started")}
 ${p(`Your email works even if it isn't a CMU address — invited admins are domain-exempt.`)}`;
   return {
-    subject: `You're a ${opts.committeeName} ${roleLabel} on ScottyLabs Invites`,
+    subject: `You're ${article} ${label} on ScottyLabs Invites`,
     html: layout(inner, `Sign in to start organizing ${opts.committeeName} events`),
-    text: `${opts.invitedBy} added you as a ${opts.committeeName} ${roleLabel} on ScottyLabs Invites.\n\nSign in with this email at ${env.appUrl}/signin — the Organize tab unlocks once you do.`,
+    text: `${opts.invitedBy} added you as ${article} ${label} on ScottyLabs Invites.\n\nSign in with this email at ${env.appUrl}/signin — the Organize tab unlocks once you do.`,
   };
 }
 
