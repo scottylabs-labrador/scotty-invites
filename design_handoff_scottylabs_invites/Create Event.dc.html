@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Medium.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Bold.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Black.woff2') format('woff2');font-weight:900;font-display:swap}
+@font-face{font-family:'JetBrainsMono';src:url('apps/web/app/assets/fonts/JetBrainsMono-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
+html,body{margin:0;min-height:100%;font-family:Satoshi,system-ui,Avenir,Helvetica,Arial,sans-serif;font-weight:500;background:#fff;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{text-decoration:none;color:hsl(0,0%,0%)}a:hover{color:hsl(0,0%,0%)}
+.sl-social:hover img{filter:invert(1)}.sl-social:hover .sl-social-label{color:hsl(0,0%,93%) !important}.sl-social:active{filter:brightness(80%)}
+</style>
+</helmet>
+<div data-screen-label="Create event" style="min-width:0;display:flex;flex-direction:column;min-height:100vh">
+  <header style="position:sticky;top:0;background:#fff;border-bottom:1px solid #c7d2dc;z-index:999">
+    <div style="max-width:1200px;margin-inline:auto;padding:0 clamp(16px,4.5vw,40px);min-height:64px;display:flex;align-items:stretch;flex-wrap:wrap;column-gap:24px;box-sizing:border-box">
+      <a href="Events Home.dc.html" style="display:flex;gap:10px;align-items:center;padding:14px 0">
+        <img src="apps/web/app/assets/scottylabs-logo.svg" style="height:26px" alt="">
+        <div style="font-size:17px;font-weight:700;letter-spacing:-0.025em;color:#1e1e1e;white-space:nowrap">ScottyLabs Invites</div>
+      </a>
+      <nav style="display:flex;gap:18px;align-items:stretch;font-family:Inter,sans-serif">
+        <a href="Events Home.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f;box-shadow:none" style-hover="color:#1e1e1e">Browse</a>
+        <a href="Ticket.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f;box-shadow:none" style-hover="color:#1e1e1e">My tickets</a>
+        <a href="Organizer Dashboard.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:600;color:#0d89be;box-shadow:inset 0 -2px 0 #0e96d1">Organize</a>
+        <a href="Admin Portal.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f;box-shadow:none" style-hover="color:#1e1e1e">Admin</a>
+      </nav>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-family:Inter,sans-serif;padding:11px 0">
+        <a href="Current Events Page.dc.html" style="display:flex;align-items:center;gap:5px;font-size:12.5px;font-weight:500;color:#5f6f7f" style-hover="color:#1e1e1e">scottylabs.org<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"></path><path d="M7 7h10v10"></path></svg></a>
+        <span style="display:flex;align-items:center;gap:6px;background:#f0f4f8;color:#4a5662;font-size:13px;font-weight:600;padding:8px 18px;border-radius:100px;border:1px solid #d9e1e7">Draft</span>
+        <a href="Sign In.dc.html" style="width:32px;height:32px;border-radius:100px;background:#e7f5fa;color:#0a6b94;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700" title="jtartan@andrew.cmu.edu — signed in via email link">JT</a>
+      </div>
+    </div>
+  </header>
+  <main style="flex-grow:1;background:#f0f4f8">
+    <section style="padding-inline:clamp(16px,4.5vw,40px);margin-inline:auto;max-width:1200px;box-sizing:border-box;padding-bottom:72px">
+      <h1 style="margin:36px 0 0;font-size:1.75rem;font-weight:700;letter-spacing:-0.02em;color:hsl(0,0%,0%)">Create an event</h1>
+      <div style="margin-top:6px;font-family:Inter,sans-serif;font-size:13px;color:#5f6f7f">Admin-only — you are signed in as an Events committee admin (<a href="Admin Portal.dc.html" style="color:#0d89be;font-weight:500">manage admins</a>). Every event gets a signup page, Scotty Invites, and a check-in scanner.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:24px;margin-top:24px;align-items:flex-start;font-family:Inter,sans-serif">
+        <div style="display:flex;flex-direction:column;gap:18px;flex:1 1 480px;min-width:0">
+          <div style="background:#fff;border:1px solid #c7d2dc;border-radius:12px;padding:22px 24px;box-shadow:0 1px 2px rgba(30,30,30,0.06);display:flex;flex-direction:column;gap:16px">
+            <div style="font-family:Satoshi,sans-serif;font-size:17px;font-weight:700;color:#1e1e1e">Basics</div>
+            <label style="display:flex;flex-direction:column;gap:6px;max-width:280px">
+              <span style="font-size:12px;font-weight:600;color:#4a5662">Committee <span style="font-weight:400;color:#7a8fa3">— pick ScottyLabs for all-club events like GBMs</span></span>
+              <select value="{{ committee }}" onChange="{{ setCommittee }}" style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:10px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none;appearance:auto">
+                <option>Events</option><option>Tech</option><option>Design</option><option>Foundry</option><option>Outreach</option><option>Finance</option><option>Labrador</option><option>Bootcamp</option><option>ScottyLabs</option>
+              </select>
+            </label>
+            <label style="display:flex;flex-direction:column;gap:6px">
+              <span style="font-size:12px;font-weight:600;color:#4a5662">Event name</span>
+              <input value="{{ name }}" onChange="{{ setName }}" placeholder="e.g. Bootcamp: React fundamentals" style="font-family:Satoshi,sans-serif;font-size:17px;font-weight:700;color:#1e1e1e;padding:12px 14px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)">
+            </label>
+            <label style="display:flex;flex-direction:column;gap:6px">
+              <span style="font-size:12px;font-weight:600;color:#4a5662">Description</span>
+              <textarea rows="3" placeholder="What happens, who it's for, what to bring." style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:10px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none;resize:vertical" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)"></textarea>
+            </label>
+            <div style="display:grid;grid-template-columns:1.2fr 0.9fr 0.9fr;gap:12px">
+              <label style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:12px;font-weight:600;color:#4a5662">Date</span>
+                <input value="Sat, Oct 3 2026" style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:10px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)">
+              </label>
+              <label style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:12px;font-weight:600;color:#4a5662">Starts</span>
+                <input value="4:00 PM" style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:10px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)">
+              </label>
+              <label style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:12px;font-weight:600;color:#4a5662">Ends</span>
+                <input value="6:00 PM" style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:10px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)">
+              </label>
+            </div>
+            <label style="display:flex;flex-direction:column;gap:6px">
+              <span style="font-size:12px;font-weight:600;color:#4a5662">Location</span>
+              <input value="Tepper 2612" style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:10px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)">
+            </label>
+          </div>
+          <div style="background:#fff;border:1px solid #c7d2dc;border-radius:12px;padding:22px 24px;box-shadow:0 1px 2px rgba(30,30,30,0.06)">
+            <div style="font-family:Satoshi,sans-serif;font-size:17px;font-weight:700;color:#1e1e1e">Who can sign up</div>
+            <div style="display:flex;gap:8px;margin-top:14px">
+              <sc-for list="{{ audiences }}" as="a" hint-placeholder-count="3">
+                <button onClick="{{ a.onClick }}" style="{{ a.style }}">{{ a.label }}</button>
+              </sc-for>
+            </div>
+            <div style="font-size:12px;color:#7a8fa3;margin-top:10px">{{ audienceNote }}</div>
+          </div>
+          <div style="background:#fff;border:1px solid #c7d2dc;border-radius:12px;padding:22px 24px;box-shadow:0 1px 2px rgba(30,30,30,0.06)">
+            <div style="font-family:Satoshi,sans-serif;font-size:17px;font-weight:700;color:#1e1e1e">Registration</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+              <sc-for list="{{ models }}" as="m" hint-placeholder-count="4">
+                <button onClick="{{ m.onClick }}" style="{{ m.style }}">
+                  <div style="display:flex;align-items:center;gap:8px"><div style="{{ m.radioStyle }}"></div><span style="font-size:13.5px;font-weight:600;color:#1e1e1e">{{ m.label }}</span></div>
+                  <div style="font-size:12px;color:#5f6f7f;margin-top:5px;line-height:1.4">{{ m.sub }}</div>
+                </button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ showCapacity }}" hint-placeholder-val="{{ true }}">
+              <label style="display:flex;align-items:center;gap:12px;margin-top:14px">
+                <span style="font-size:12px;font-weight:600;color:#4a5662">Capacity</span>
+                <input value="40" style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:8px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none;width:70px" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)">
+                <span style="font-size:12px;color:#7a8fa3">Waitlist opens automatically when full.</span>
+              </label>
+            </sc-if>
+            <sc-if value="{{ showInviteNote }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:14px;display:flex;align-items:center;gap:10px;background:#f0f4f8;border:1px solid #d9e1e7;border-radius:8px;padding:12px 14px;font-size:12.5px;color:#4a5662">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                Only people with the invite link or a +1 transfer can sign up. Link generated on publish.
+              </div>
+            </sc-if>
+          </div>
+          <div style="background:#fff;border:1px solid #c7d2dc;border-radius:12px;padding:22px 24px;box-shadow:0 1px 2px rgba(30,30,30,0.06)">
+            <div style="font-family:Satoshi,sans-serif;font-size:17px;font-weight:700;color:#1e1e1e">Data to capture</div>
+            <div style="font-size:12px;color:#7a8fa3;margin-top:4px">Andrew ID and name come free with andrew sign-in. Ask only for what this event needs.</div>
+            <div style="display:flex;flex-direction:column;margin-top:10px">
+              <sc-for list="{{ captures }}" as="c" hint-placeholder-count="5">
+                <button onClick="{{ c.onClick }}" style="{{ c.rowStyle }}">
+                  <div style="{{ c.trackStyle }}"><div style="{{ c.knobStyle }}"></div></div>
+                  <span style="font-size:13.5px;font-weight:500;color:#1e1e1e">{{ c.label }}</span>
+                  <span style="margin-left:auto;font-size:11.5px;color:#7a8fa3">{{ c.note }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #c7d2dc;border-radius:12px;padding:22px 24px;box-shadow:0 1px 2px rgba(30,30,30,0.06)">
+            <div style="font-family:Satoshi,sans-serif;font-size:17px;font-weight:700;color:#1e1e1e">Your questions</div>
+            <div style="font-size:12px;color:#7a8fa3;margin-top:4px">Edit inline — guests see them in this order on the signup form.</div>
+            <div style="display:flex;flex-direction:column;gap:10px;margin-top:14px">
+              <sc-for list="{{ questions }}" as="q" hint-placeholder-count="1">
+                <div style="display:flex;align-items:center;gap:10px;border:1px solid #c7d2dc;border-radius:8px;padding:12px 14px;background:#f8fafc">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#aebdcc" stroke-width="2" stroke-linecap="round"><line x1="4" y1="8" x2="20" y2="8"></line><line x1="4" y1="16" x2="20" y2="16"></line></svg>
+                  <input value="{{ q.text }}" onChange="{{ q.setText }}" placeholder="Ask anything — e.g. GitHub handle, team size" style="flex:1;min-width:0;border:none;outline:none;background:transparent;font-family:Inter,sans-serif;font-size:13.5px;color:#1e1e1e">
+                  <select value="{{ q.type }}" onChange="{{ q.setType }}" style="font-family:Inter,sans-serif;font-size:11px;font-weight:600;color:#4a5662;background:#fff;border:1px solid #d9e1e7;border-radius:4px;padding:3px 6px;outline:none;appearance:auto">
+                    <option>Short text</option><option>Long text</option><option>Select</option><option>File</option>
+                  </select>
+                  <button onClick="{{ q.remove }}" style="all:unset;cursor:pointer;margin-left:auto;color:#7a8fa3;display:flex" style-hover="color:#d72444">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                </div>
+              </sc-for>
+              <button onClick="{{ addQuestion }}" style="all:unset;cursor:pointer;box-sizing:border-box;display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px dashed #aebdcc;border-radius:8px;padding:12px;font-size:13px;font-weight:500;color:#5f6f7f;transition:border-color 120ms" style-hover="border-color:#0e96d1;color:#0d89be">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                Add a question
+              </button>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #c7d2dc;border-radius:12px;padding:22px 24px;box-shadow:0 1px 2px rgba(30,30,30,0.06)">
+            <div style="font-family:Satoshi,sans-serif;font-size:17px;font-weight:700;color:#1e1e1e">Updates &amp; contact</div>
+            <div style="font-size:12px;color:#7a8fa3;margin-top:4px">Status emails go out via Mailgun. Every invite shows a contact.</div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-top:14px">
+              <label style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:12px;font-weight:600;color:#4a5662">Send status updates to</span>
+                <input value="foundry-leads@scottylabs.org" style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:10px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)">
+              </label>
+              <label style="display:flex;flex-direction:column;gap:6px">
+                <span style="font-size:12px;font-weight:600;color:#4a5662">Contact email on the invite</span>
+                <input value="{{ contactEmail }}" onChange="{{ setContactEmail }}" style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:10px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)">
+              </label>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;margin-top:16px;flex-wrap:wrap">
+              <span style="font-size:12px;font-weight:600;color:#4a5662">Digest frequency</span>
+              <div style="display:flex;gap:8px">
+                <sc-for list="{{ digestChips }}" as="dg" hint-placeholder-count="3">
+                  <button onClick="{{ dg.onClick }}" style="{{ dg.style }}">{{ dg.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="font-size:11.5px;color:#7a8fa3;margin-top:12px;line-height:1.5">Digests cover new signups and reviews waiting. Requests pending more than 24 hours email immediately.</div>
+          </div>
+        </div>
+        <div style="position:sticky;top:96px;display:flex;flex-direction:column;gap:16px;flex:1 1 320px;max-width:380px">
+          <div style="background:#fff;border:1px solid #c7d2dc;border-radius:12px;padding:20px;box-shadow:0 1px 2px rgba(30,30,30,0.06)">
+            <div style="display:flex;align-items:baseline">
+              <div style="font-family:Satoshi,sans-serif;font-size:15px;font-weight:700;color:#1e1e1e">Scotty Invite preview</div>
+              <span style="margin-left:auto;font-size:11px;color:#7a8fa3">what guests get</span>
+            </div>
+            <div style="{{ previewOuter }}">
+              <div style="padding:12px 14px;display:flex;align-items:center;gap:8px">
+                <img src="apps/web/app/assets/scottylabs-logo.svg" style="{{ logoStyle }}" alt="">
+                <span style="margin-left:auto;font-family:JetBrainsMono,monospace;font-size:10px;color:{{ mutedFg }}">Nº 001</span>
+              </div>
+              <div style="{{ previewArt }}">
+                <div style="font-size:9px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.85)">{{ committeeLabel }}</div>
+                <div style="font-family:Satoshi,sans-serif;font-size:19px;font-weight:700;color:#fff;letter-spacing:-0.02em;margin-top:3px;line-height:1.2">{{ previewName }}</div>
+              </div>
+              <div style="padding:12px 14px;display:flex;justify-content:space-between;border-top:1.5px dashed {{ dashColor }}">
+                <span style="font-family:JetBrainsMono,monospace;font-size:9px;color:{{ mutedFg }}">OCT 03 · 16:00</span>
+                <span style="font-family:JetBrainsMono,monospace;font-size:9px;color:{{ mutedFg }}">TEPPER 2612</span>
+              </div>
+              <div style="padding:0 14px 12px;font-family:JetBrainsMono,monospace;font-size:8.5px;color:{{ mutedFg }};text-align:center">questions? {{ contactEmail }}</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;margin-top:14px">
+              <div style="display:flex;gap:8px">
+                <sc-for list="{{ artChips }}" as="art" hint-placeholder-count="4">
+                  <button onClick="{{ art.onClick }}" title="{{ art.name }}" style="{{ art.style }}"></button>
+                </sc-for>
+              </div>
+              <div style="display:flex;gap:8px">
+                <sc-for list="{{ styleChips }}" as="sc" hint-placeholder-count="2">
+                  <button onClick="{{ sc.onClick }}" style="{{ sc.style }}">{{ sc.label }}</button>
+                </sc-for>
+              </div>
+              <button onClick="{{ toggleStamp }}" style="all:unset;cursor:pointer;display:flex;align-items:center;gap:10px">
+                <div style="{{ stampTrack }}"><div style="{{ stampKnob }}"></div></div>
+                <span style="font-size:12.5px;color:#4a5662">Committee stamp on the pass</span>
+              </button>
+            </div>
+          </div>
+          <sc-if value="{{ notPublished }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ publish }}" style="all:unset;cursor:pointer;box-sizing:border-box;width:100%;text-align:center;background:#0e96d1;color:#fff;font-size:15px;font-weight:600;padding:13px 0;border-radius:100px;transition:background-color 120ms,transform 120ms" style-hover="background-color:#0d89be" style-active="background-color:#0a6b94;transform:scale(0.97)">Publish event</button>
+            <button style="all:unset;cursor:pointer;text-align:center;font-size:13px;font-weight:500;color:#5f6f7f;padding:2px 0" style-hover="color:#1e1e1e">Save draft</button>
+          </sc-if>
+          <sc-if value="{{ published }}" hint-placeholder-val="{{ false }}">
+            <div style="background:#e9f5ec;border:1px solid #cde8d4;border-radius:12px;padding:18px 20px">
+              <div style="display:flex;align-items:center;gap:8px;font-family:Satoshi,sans-serif;font-size:15px;font-weight:700;color:#0d4b17">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3a9a4c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                Event is live
+              </div>
+              <div style="font-family:JetBrainsMono,monospace;font-size:12px;color:#38424b;background:#fff;border:1px solid #cde8d4;border-radius:6px;padding:8px 12px;margin-top:10px">scty.li/worksession-oct3</div>
+              <div style="display:flex;gap:14px;margin-top:12px;font-size:12.5px;font-weight:600">
+                <a href="Event Page.dc.html" style="color:#0d89be">View event page</a>
+                <a href="Organizer Dashboard.dc.html" style="color:#0d89be">Open dashboard</a>
+              </div>
+            </div>
+          </sc-if>
+          <div style="font-size:11.5px;color:#7a8fa3;line-height:1.5;padding:0 4px">Publishing lists this event on scottylabs.org/events and gives every guest a numbered Scotty Invite.</div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer style="border-top:1px solid #c7d2dc;background:#fff">
+    <div style="max-width:1200px;margin-inline:auto;padding:14px clamp(16px,4.5vw,40px);display:flex;align-items:center;gap:10px 24px;flex-wrap:wrap;box-sizing:border-box;font-family:Inter,sans-serif;font-size:13px;color:#5f6f7f">
+      <div>Designed, developed and maintained with ❤️ by ScottyLabs.</div>
+      <div style="margin-left:auto;display:flex;gap:18px;font-weight:500">
+        <a href="Current Events Page.dc.html" style="color:#0d89be">scottylabs.org</a>
+        <a href="Architecture.dc.html" style="color:#0d89be">Architecture</a>
+        <a href="#" style="color:#0d89be">GitHub</a>
+        <a href="Sign In.dc.html" style="color:#0d89be">Sign in</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1280}}">
+class Component extends DCLogic {
+  state = {
+    name: "Committee work session",
+    audience: "CMU only",
+    model: "Instant RSVP",
+    art: "cool", passStyle: "dark", stamp: true, committee: "Events", contactEmail: "foundry@scottylabs.org", digest: "Hourly",
+    published: false,
+    captures: { "Major + class year": true, "Dietary restrictions": false, "Resume upload": false, "How they heard about it": true },
+    questions: [{ id: 1, text: "What are you hoping to work on?", type: "Short text" }],
+    nextId: 2,
+  };
+  renderVals() {
+    const s = this.state;
+    const segOn = "all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:8px 18px;border-radius:100px;background:#1e1e1e;color:#fff;border:1px solid #1e1e1e";
+    const segOff = "all:unset;cursor:pointer;font-size:13px;font-weight:500;padding:8px 18px;border-radius:100px;background:#fff;color:#4a5662;border:1px solid #c7d2dc";
+    const audienceNotes = {
+      "CMU only": "Guests must sign in with an andrew email. IDs verified automatically.",
+      "CMU + guests": "Andrew sign-in required, but approved guests can transfer a +1 to anyone.",
+      "Public": "Anyone with the link can sign up with any email.",
+    };
+    const audiences = ["CMU only", "CMU + guests", "Public"].map((a) => ({
+      label: a, onClick: () => this.setState({ audience: a }), style: a === s.audience ? segOn : segOff,
+    }));
+    const modelSubs = {
+      "Instant RSVP": "One click and they're in. Best for worksessions and GBMs.",
+      "Capacity + waitlist": "Caps signups; the waitlist promotes in order.",
+      "Approval required": "You review every request before an invite is issued.",
+      "Invite only": "Private link or code. Nothing listed publicly.",
+    };
+    const models = Object.keys(modelSubs).map((m) => {
+      const on = m === s.model;
+      return {
+        label: m, sub: modelSubs[m],
+        onClick: () => this.setState({ model: m }),
+        style: `all:unset;cursor:pointer;box-sizing:border-box;border:1.5px solid ${on ? "#0e96d1" : "#c7d2dc"};background:${on ? "#e7f5fa" : "#fff"};border-radius:10px;padding:13px 15px;transition:border-color 120ms`,
+        radioStyle: `flex:none;width:15px;height:15px;border-radius:100px;border:${on ? "5px solid #0e96d1" : "1.5px solid #aebdcc"};background:#fff;box-sizing:border-box`,
+      };
+    });
+    const captureNotes = { "Major + class year": "two dropdowns", "Dietary restrictions": "for food orders", "Resume upload": "PDF, optional for guests", "How they heard about it": "source tracking" };
+    const captures = [
+      { label: "Andrew ID + name", locked: true, on: true, note: "always on" },
+      ...Object.keys(s.captures).map((k) => ({ label: k, on: s.captures[k], note: captureNotes[k] })),
+    ].map((c) => ({
+      label: c.label, note: c.note,
+      onClick: c.locked ? () => {} : () => this.setState((st) => ({ captures: { ...st.captures, [c.label]: !st.captures[c.label] } })),
+      rowStyle: `all:unset;cursor:${c.locked ? "default" : "pointer"};display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid #e9ebf8;${c.locked ? "opacity:0.65" : ""}`,
+      trackStyle: `flex:none;width:34px;height:19px;border-radius:100px;background:${c.on ? "#0e96d1" : "#aebdcc"};position:relative;transition:background-color 180ms cubic-bezier(0.2,0,0,1)`,
+      knobStyle: `position:absolute;top:2px;left:${c.on ? "17px" : "2px"};width:15px;height:15px;border-radius:100px;background:#fff;transition:left 180ms cubic-bezier(0.2,0,0,1);box-shadow:0 1px 2px rgba(30,30,30,0.2)`,
+    }));
+    const grads = {
+      brand: "conic-gradient(from 180deg at 50% 50%, #d72444 0%, #8766d4 25%, #0e96d1 55%, #063f58 80%, #d72444 100%)",
+      cool: "linear-gradient(135deg,#0e96d1 0%,#6940c9 100%)",
+      warm: "linear-gradient(135deg,#d72444 0%,#8766d4 100%)",
+      sunset: "linear-gradient(135deg,#e8b13a 0%,#df6f3c 50%,#d72444 100%)",
+    };
+    const artChips = Object.keys(grads).map((k) => ({
+      name: k,
+      onClick: () => this.setState({ art: k }),
+      style: `all:unset;cursor:pointer;flex:1;height:34px;border-radius:8px;background:${grads[k]};box-sizing:border-box;border:2.5px solid ${k === s.art ? "#1e1e1e" : "transparent"}`,
+    }));
+    return {
+      name: s.name,
+      setName: (e) => this.setState({ name: e.target.value }),
+      audiences, audienceNote: audienceNotes[s.audience],
+      models,
+      showCapacity: s.model === "Capacity + waitlist",
+      showInviteNote: s.model === "Invite only",
+      captures,
+      questions: s.questions.map((q) => ({ ...q,
+        remove: () => this.setState((st) => ({ questions: st.questions.filter((x) => x.id !== q.id) })),
+        setText: (e) => { const v = e.target.value; this.setState((st) => ({ questions: st.questions.map((x) => x.id === q.id ? { ...x, text: v } : x) })); },
+        setType: (e) => { const v = e.target.value; this.setState((st) => ({ questions: st.questions.map((x) => x.id === q.id ? { ...x, type: v } : x) })); },
+      })),
+      addQuestion: () => this.setState((st) => ({ questions: [...st.questions, { id: st.nextId, text: "", type: "Short text" }], nextId: st.nextId + 1 })),
+      previewOuter: s.passStyle === "dark" ? "background:#0a0a0a;border-radius:14px;overflow:hidden;margin-top:14px;box-shadow:0 8px 24px rgba(30,30,30,0.18)" : "background:#fff;border:1px solid #c7d2dc;border-radius:14px;overflow:hidden;margin-top:14px;box-shadow:0 2px 8px rgba(30,30,30,0.08)",
+      previewArt: `background:${grads[s.art]};padding:16px 14px`,
+      previewName: s.name || "Your event",
+      logoStyle: s.passStyle === "dark" ? "height:20px;filter:brightness(0) invert(1)" : "height:20px",
+      mutedFg: s.passStyle === "dark" ? "rgba(255,255,255,0.65)" : "#5f6f7f",
+      dashColor: s.passStyle === "dark" ? "rgba(255,255,255,0.25)" : "#d9e1e7",
+      committeeLabel: !s.stamp ? "Scotty invite" : s.committee === "ScottyLabs" ? "ScottyLabs · all-club" : `${s.committee} committee`,
+      committee: s.committee,
+      contactEmail: s.contactEmail,
+      setContactEmail: (e) => this.setState({ contactEmail: e.target.value }),
+      digestChips: ["Hourly", "Daily", "Weekly"].map((d) => { const on = s.digest === d; return { label: d, onClick: () => this.setState({ digest: d }), style: on ? segOn : segOff }; }),
+      setCommittee: (e) => this.setState({ committee: e.target.value }),
+      styleChips: ["Dark", "Light"].map((l) => {
+        const on = s.passStyle === l.toLowerCase();
+        return { label: l, onClick: () => this.setState({ passStyle: l.toLowerCase() }), style: on ? "all:unset;cursor:pointer;font-size:12px;font-weight:600;padding:6px 16px;border-radius:100px;background:#1e1e1e;color:#fff;border:1px solid #1e1e1e" : "all:unset;cursor:pointer;font-size:12px;font-weight:500;padding:6px 16px;border-radius:100px;background:#fff;color:#4a5662;border:1px solid #c7d2dc" };
+      }),
+      toggleStamp: () => this.setState((st) => ({ stamp: !st.stamp })),
+      stampTrack: `flex:none;width:34px;height:19px;border-radius:100px;background:${s.stamp ? "#0e96d1" : "#aebdcc"};position:relative;transition:background-color 180ms cubic-bezier(0.2,0,0,1)`,
+      stampKnob: `position:absolute;top:2px;left:${s.stamp ? "17px" : "2px"};width:15px;height:15px;border-radius:100px;background:#fff;transition:left 180ms cubic-bezier(0.2,0,0,1);box-shadow:0 1px 2px rgba(30,30,30,0.2)`,
+      artChips,
+      publish: () => this.setState({ published: true }),
+      published: s.published,
+      notPublished: !s.published,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Medium.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Bold.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Black.woff2') format('woff2');font-weight:900;font-display:swap}
+@font-face{font-family:'JetBrainsMono';src:url('apps/web/app/assets/fonts/JetBrainsMono-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
+html,body{margin:0;min-height:100%;font-family:Satoshi,system-ui,Avenir,Helvetica,Arial,sans-serif;font-weight:500;background:#f0f4f8;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{text-decoration:none;color:#0d89be}a:hover{color:#0a6b94}
+</style>
+</helmet>
+<div data-screen-label="Sign in — magic link" style="display:flex;flex-direction:column;min-height:100vh">
+  <header style="position:sticky;top:0;background:#fff;border-bottom:1px solid #c7d2dc;z-index:999">
+    <div style="max-width:1200px;margin-inline:auto;padding:0 clamp(16px,4.5vw,40px);min-height:64px;display:flex;align-items:center;gap:24px;box-sizing:border-box">
+      <a href="Events Home.dc.html" style="display:flex;gap:10px;align-items:center">
+        <img src="apps/web/app/assets/scottylabs-logo.svg" style="height:26px" alt="">
+        <div style="font-size:17px;font-weight:700;letter-spacing:-0.025em;color:#1e1e1e;white-space:nowrap">ScottyLabs Invites</div>
+      </a>
+      <a href="Current Events Page.dc.html" style="margin-left:auto;display:flex;align-items:center;gap:5px;font-family:Inter,sans-serif;font-size:12.5px;font-weight:500;color:#5f6f7f" style-hover="color:#1e1e1e">scottylabs.org<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"></path><path d="M7 7h10v10"></path></svg></a>
+    </div>
+  </header>
+  <main style="flex-grow:1;display:flex;align-items:flex-start;justify-content:center;padding:9vh clamp(16px,4.5vw,40px) 64px;box-sizing:border-box">
+    <div style="width:100%;max-width:430px;background:#fff;border:1px solid #c7d2dc;border-radius:16px;box-shadow:0 2px 8px rgba(30,30,30,0.08);padding:32px 28px;box-sizing:border-box;font-family:Inter,sans-serif">
+      <sc-if value="{{ showEmail }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;gap:0">
+          <img src="apps/web/app/assets/scottylabs-logo.svg" style="height:40px;align-self:flex-start" alt="">
+          <h1 style="margin:18px 0 0;font-family:Satoshi,sans-serif;font-size:26px;font-weight:700;letter-spacing:-0.02em;color:#1e1e1e">Sign in</h1>
+          <p style="margin:8px 0 0;font-size:14px;line-height:1.5;color:#5f6f7f;text-wrap:pretty">No passwords — we email you a link. Same email, same account, every time.</p>
+          <sc-if value="{{ signedOutNote }}" hint-placeholder-val="{{ false }}">
+            <div style="margin-top:14px;display:flex;align-items:center;gap:8px;background:#f0f4f8;border:1px solid #d9e1e7;border-radius:8px;padding:10px 12px;font-size:12.5px;color:#4a5662">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#3a9a4c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Signed out — the cookie on this device was cleared.
+            </div>
+          </sc-if>
+          <label style="display:flex;flex-direction:column;gap:6px;margin-top:22px">
+            <span style="font-size:12px;font-weight:600;color:#4a5662">Email</span>
+            <input value="{{ emailValue }}" placeholder="andrewid@andrew.cmu.edu" style="{{ emailInputStyle }}" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)">
+          </label>
+          <sc-if value="{{ showDomainError }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;gap:8px;margin-top:10px;font-size:12.5px;line-height:1.5;color:#991a30">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#d72444" stroke-width="2" stroke-linecap="round" style="flex:none;margin-top:2px"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+              <span>gmail.com isn't a CMU domain. Guests get in through a friend's +1 link — organizers with outside emails need a super-admin invite.</span>
+            </div>
+          </sc-if>
+          <button onClick="{{ toggleCookie }}" style="all:unset;cursor:pointer;display:flex;align-items:center;gap:10px;margin-top:16px">
+            <div style="{{ checkboxStyle }}">
+              <sc-if value="{{ cookieOn }}" hint-placeholder-val="{{ true }}"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></sc-if>
+            </div>
+            <span style="font-size:13px;color:#38424b">Keep me signed in on this device</span>
+          </button>
+          <button onClick="{{ sendLink }}" style="all:unset;cursor:pointer;box-sizing:border-box;width:100%;text-align:center;margin-top:18px;background:#0e96d1;color:#fff;font-size:15px;font-weight:600;padding:13px 0;border-radius:100px;transition:background-color 120ms cubic-bezier(0.2,0,0,1),transform 120ms" style-hover="background-color:#0d89be" style-active="background-color:#0a6b94;transform:scale(0.97)">Email me a sign-in link</button>
+          <div style="border-top:1px solid #e9ebf8;margin-top:22px;padding-top:14px;font-size:12px;line-height:1.55;color:#7a8fa3;text-wrap:pretty">Works with <span style="font-family:JetBrainsMono,monospace;font-size:11px;color:#4a5662">andrew.cmu.edu</span>, <span style="font-family:JetBrainsMono,monospace;font-size:11px;color:#4a5662">cs.cmu.edu</span>, and <span style="font-family:JetBrainsMono,monospace;font-size:11px;color:#4a5662">cmu.edu</span> addresses. Invited admins can use any email.</div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ showCode }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;align-items:center;text-align:center">
+          <div style="width:48px;height:48px;border-radius:100px;background:#e7f5fa;display:flex;align-items:center;justify-content:center">
+            <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="#0e96d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"></path></svg>
+          </div>
+          <h1 style="margin:16px 0 0;font-family:Satoshi,sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.02em;color:#1e1e1e">Check your inbox</h1>
+          <p style="margin:8px 0 0;font-size:13.5px;line-height:1.55;color:#5f6f7f;text-wrap:pretty">We sent a link and a 6-digit code to<br><span style="font-family:JetBrainsMono,monospace;font-size:12.5px;color:#1e1e1e">jtartan@andrew.cmu.edu</span><br>It expires in 10 minutes.</p>
+          <div style="display:flex;gap:8px;margin-top:22px">
+            <div style="width:42px;height:50px;border:1px solid #c7d2dc;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:JetBrainsMono,monospace;font-size:20px;color:#1e1e1e">4</div>
+            <div style="width:42px;height:50px;border:1px solid #c7d2dc;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:JetBrainsMono,monospace;font-size:20px;color:#1e1e1e">2</div>
+            <div style="width:42px;height:50px;border:1px solid #c7d2dc;border-radius:8px;display:flex;align-items:center;justify-content:center;font-family:JetBrainsMono,monospace;font-size:20px;color:#1e1e1e">8</div>
+            <div style="width:42px;height:50px;border:1.5px solid #0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25);border-radius:8px;display:flex;align-items:center;justify-content:center"></div>
+            <div style="width:42px;height:50px;border:1px solid #c7d2dc;border-radius:8px"></div>
+            <div style="width:42px;height:50px;border:1px solid #c7d2dc;border-radius:8px"></div>
+          </div>
+          <button onClick="{{ verify }}" style="all:unset;cursor:pointer;box-sizing:border-box;width:100%;text-align:center;margin-top:22px;background:#0e96d1;color:#fff;font-size:15px;font-weight:600;padding:13px 0;border-radius:100px;transition:background-color 120ms" style-hover="background-color:#0d89be" style-active="transform:scale(0.97)">Verify code</button>
+          <div style="display:flex;gap:16px;margin-top:16px;font-size:13px;font-weight:500">
+            <button style="all:unset;cursor:pointer;color:#0d89be" style-hover="color:#0a6b94">Resend email</button>
+            <button onClick="{{ back }}" style="all:unset;cursor:pointer;color:#5f6f7f" style-hover="color:#1e1e1e">Use a different address</button>
+          </div>
+          <div style="border-top:1px solid #e9ebf8;margin-top:20px;padding-top:12px;font-size:11.5px;color:#7a8fa3">Sent via Mailgun from hello@scottylabs.org</div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ showAccount }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;align-items:center;text-align:center">
+          <div style="position:relative">
+            <div style="width:56px;height:56px;border-radius:100px;background:#e7f5fa;color:#0a6b94;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700">JT</div>
+            <div style="position:absolute;right:-2px;bottom:-2px;width:20px;height:20px;border-radius:100px;background:#3a9a4c;border:2.5px solid #fff;display:flex;align-items:center;justify-content:center"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
+          </div>
+          <h1 style="margin:16px 0 0;font-family:Satoshi,sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.02em;color:#1e1e1e">You're signed in</h1>
+          <div style="margin-top:8px;font-family:JetBrainsMono,monospace;font-size:12.5px;color:#38424b;background:#f0f4f8;border:1px solid #d9e1e7;border-radius:6px;padding:7px 14px">jtartan@andrew.cmu.edu</div>
+          <p style="margin:14px 0 0;font-size:13px;line-height:1.55;color:#5f6f7f;text-wrap:pretty">A secure cookie keeps this device signed in for 30 days. Sign in with the same email anywhere — it's always the same account, tickets included.</p>
+          <a href="Events Home.dc.html" style="box-sizing:border-box;width:100%;text-align:center;margin-top:20px;background:#0e96d1;color:#fff;font-size:15px;font-weight:600;padding:13px 0;border-radius:100px;transition:background-color 120ms;display:block" style-hover="background-color:#0d89be;color:#fff">Continue to events</a>
+          <button onClick="{{ signOut }}" style="all:unset;cursor:pointer;box-sizing:border-box;width:100%;text-align:center;margin-top:10px;background:#fff;color:#1e1e1e;border:1px solid #9eb1c2;font-size:14px;font-weight:600;padding:11px 0;border-radius:100px;transition:border-color 120ms" style-hover="border-color:#d72444;color:#d72444">Sign out</button>
+        </div>
+      </sc-if>
+    </div>
+  </main>
+  <footer style="border-top:1px solid #c7d2dc;background:#fff">
+    <div style="max-width:1200px;margin-inline:auto;padding:14px clamp(16px,4.5vw,40px);display:flex;align-items:center;gap:10px 24px;flex-wrap:wrap;box-sizing:border-box;font-family:Inter,sans-serif;font-size:13px;color:#5f6f7f">
+      <div>Designed, developed and maintained with ❤️ by ScottyLabs.</div>
+      <div style="margin-left:auto;display:flex;gap:18px;font-weight:500">
+        <a href="Current Events Page.dc.html" style="color:#0d89be">scottylabs.org</a>
+        <a href="Architecture.dc.html" style="color:#0d89be">Architecture</a>
+        <a href="#" style="color:#0d89be">GitHub</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1100, &quot;height&quot;: 760}, &quot;authState&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;email&quot;, &quot;options&quot;: [&quot;email&quot;, &quot;code&quot;, &quot;signed-in&quot;, &quot;domain-error&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Auth&quot;}}">
+class Component extends DCLogic {
+  state = { phase: null, cookie: true, signedOut: false };
+  renderVals() {
+    const phase = this.state.phase ?? (this.props.authState ?? "email");
+    const domainError = phase === "domain-error";
+    return {
+      showEmail: phase === "email" || domainError,
+      showCode: phase === "code",
+      showAccount: phase === "signed-in",
+      showDomainError: domainError,
+      emailValue: domainError ? "jane@gmail.com" : "jtartan@andrew.cmu.edu",
+      emailInputStyle: domainError
+        ? "font-family:Inter,sans-serif;font-size:15px;color:#1e1e1e;padding:12px 14px;border:1.5px solid #d72444;border-radius:8px;background:#fff;outline:none;box-shadow:0 0 0 3px rgba(215,36,68,0.12)"
+        : "font-family:Inter,sans-serif;font-size:15px;color:#1e1e1e;padding:12px 14px;border:1px solid #c7d2dc;border-radius:8px;background:#fff;outline:none",
+      signedOutNote: this.state.signedOut && phase === "email",
+      cookieOn: this.state.cookie,
+      toggleCookie: () => this.setState((s) => ({ cookie: !s.cookie })),
+      checkboxStyle: `flex:none;width:18px;height:18px;border-radius:4px;display:flex;align-items:center;justify-content:center;box-sizing:border-box;transition:background-color 120ms;${this.state.cookie ? "background:#1e1e1e;border:1px solid #1e1e1e" : "background:#fff;border:1.5px solid #aebdcc"}`,
+      sendLink: () => this.setState({ phase: "code", signedOut: false }),
+      verify: () => this.setState({ phase: "signed-in" }),
+      back: () => this.setState({ phase: "email", signedOut: false }),
+      signOut: () => this.setState({ phase: "email", signedOut: true }),
+    };
+  }
+}
+</script>
+</body>
+</html>

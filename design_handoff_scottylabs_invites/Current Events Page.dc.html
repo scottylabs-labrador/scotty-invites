@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Medium.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Bold.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Black.woff2') format('woff2');font-weight:900;font-display:swap}
+@font-face{font-family:'JetBrainsMono';src:url('apps/web/app/assets/fonts/JetBrainsMono-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
+html,body{margin:0;min-height:100%;font-family:Satoshi,system-ui,Avenir,Helvetica,Arial,sans-serif;font-weight:500;background:#fff;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{text-decoration:none;color:hsl(0,0%,0%)}a:hover{color:hsl(0,0%,0%)}
+.sl-social:hover img{filter:invert(1)}.sl-social:hover .sl-social-label{color:hsl(0,0%,93%) !important}.sl-social:active{filter:brightness(80%)}
+</style>
+</helmet>
+<div data-screen-label="Current /events (recreation)" style="min-width:950px;display:flex;flex-direction:column;min-height:100vh">
+  <header style="position:sticky;top:0;backdrop-filter:blur(40px);background:rgba(255,255,255,0.809);z-index:999">
+    <div style="max-width:1400px;margin-inline:auto;padding:20px 40px;display:flex;box-sizing:border-box">
+      <a href="#" style="display:flex;gap:10px;align-items:center;font-size:1.25rem;font-weight:500;margin-right:auto">
+        <img src="apps/web/app/assets/scottylabs-logo.svg" style="height:1.5em" alt="">
+        <div style="color:hsl(0,0%,0%)">ScottyLabs</div>
+      </a>
+      <nav style="display:flex;gap:2px">
+        <a href="#" style="display:flex;gap:4px;padding:10px 13px;font-size:1rem;align-items:center;color:hsl(0,0%,0%);border:1px solid transparent;border-radius:10px" style-hover="background-color:hsl(0,0%,97%)">
+          <img src="apps/web/app/assets/icons/projects.svg" style="height:1.1em" alt=""><div>Projects</div>
+        </a>
+        <a href="#" style="display:flex;gap:4px;padding:10px 13px;font-size:1rem;align-items:center;color:hsl(0,0%,0%);border:1px solid transparent;border-radius:10px" style-hover="background-color:hsl(0,0%,97%)">
+          <img src="apps/web/app/assets/icons/team.svg" style="height:1.1em" alt=""><div>Team</div>
+        </a>
+        <a href="#" style="display:flex;gap:4px;padding:10px 13px;font-size:1rem;align-items:center;color:hsl(0,0%,0%);border:1px solid transparent;border-radius:10px" style-hover="background-color:hsl(0,0%,97%)">
+          <img src="apps/web/app/assets/icons/sponsors.svg" style="height:1.1em" alt=""><div>Sponsors</div>
+        </a>
+      </nav>
+    </div>
+  </header>
+  <main style="flex-grow:1">
+    <section style="padding-inline:40px;margin-inline:auto;max-width:1200px">
+      <div style="margin-top:20px;display:flex;flex-direction:column;align-items:center;gap:20px;font-size:1.5rem;color:hsl(0,0%,0%)">
+        <img src="apps/web/app/assets/scotty-in-progress.svg" style="height:200px" alt="">
+        <div>We are still working on this page! Please check back later</div>
+      </div>
+    </section>
+  </main>
+  <footer>
+    <div style="height:8px;background:linear-gradient(90deg,#ff004e 0%,#4f2485 54%,#40d2fc 100%)"></div>
+    <div style="max-width:1300px;height:130px;padding:0 40px;margin:auto;display:flex;overflow:hidden;align-items:stretch;box-sizing:border-box">
+      <div style="color:hsl(0,0%,0%);font-size:1.25rem;margin-right:auto;align-self:center">Made with ❤️ by ScottyLabs © 2026</div>
+      <a class="sl-social" href="https://tartanconnect.cmu.edu/scottylabs/club_signup" target="_blank" style="width:95px;display:flex;align-items:center;transition:0.1s background-color ease-out" style-hover="background-color:hsl(0,100%,30%)">
+        <div style="margin:auto;text-align:center"><img src="apps/web/app/assets/icons/socials/tartan-connect.png" style="height:30px;margin:auto;display:block;transition:0.1s all" alt=""><div class="sl-social-label" style="font-size:0.875rem;color:hsl(0,0%,0%);height:15px;transition:0.1s all">Tartan Connect</div></div>
+      </a>
+      <img src="apps/web/app/assets/icons/socials/social-divider.png" style="margin:-25px 0;width:20px" alt="">
+      <a class="sl-social" href="https://www.instagram.com/cmu.scottylabs/" target="_blank" style="width:95px;display:flex;align-items:center;transition:0.1s background-color ease-out" style-hover="background-color:#6532D2">
+        <div style="margin:auto;text-align:center"><img src="apps/web/app/assets/icons/socials/instagram.svg" style="height:30px;margin:auto;display:block;transition:0.1s all" alt=""><div class="sl-social-label" style="font-size:0.875rem;color:hsl(0,0%,0%);height:15px;transition:0.1s all">Instagram</div></div>
+      </a>
+      <img src="apps/web/app/assets/icons/socials/social-divider.png" style="margin:-25px 0;width:20px" alt="">
+      <a class="sl-social" href="https://www.linkedin.com/company/scottylabs" target="_blank" style="width:95px;display:flex;align-items:center;transition:0.1s background-color ease-out" style-hover="background-color:#0E76A8">
+        <div style="margin:auto;text-align:center"><img src="apps/web/app/assets/icons/socials/linkedin.svg" style="height:30px;margin:auto;display:block;transition:0.1s all" alt=""><div class="sl-social-label" style="font-size:0.875rem;color:hsl(0,0%,0%);height:15px;transition:0.1s all">LinkedIn</div></div>
+      </a>
+      <img src="apps/web/app/assets/icons/socials/social-divider.png" style="margin:-25px 0;width:20px" alt="">
+      <a class="sl-social" href="https://medium.com/tartanhacks" target="_blank" style="width:95px;display:flex;align-items:center;transition:0.1s background-color ease-out" style-hover="background-color:black">
+        <div style="margin:auto;text-align:center"><img src="apps/web/app/assets/icons/socials/medium.svg" style="height:30px;margin:auto;display:block;transition:0.1s all" alt=""><div class="sl-social-label" style="font-size:0.875rem;color:hsl(0,0%,0%);height:15px;transition:0.1s all">Medium</div></div>
+      </a>
+      <img src="apps/web/app/assets/icons/socials/social-divider.png" style="margin:-25px 0;width:20px" alt="">
+      <a class="sl-social" href="https://join.slack.com/t/scottylabs/shared_invite/zt-3bgp5in0l-T5KKNY70k70CvVVqLcKlDg" target="_blank" style="width:95px;display:flex;align-items:center;transition:0.1s background-color ease-out" style-hover="background-color:#4A154B">
+        <div style="margin:auto;text-align:center"><img src="apps/web/app/assets/icons/socials/slack.svg" style="height:30px;margin:auto;display:block;transition:0.1s all" alt=""><div class="sl-social-label" style="font-size:0.875rem;color:hsl(0,0%,0%);height:15px;transition:0.1s all">Slack</div></div>
+      </a>
+      <img src="apps/web/app/assets/icons/socials/social-divider.png" style="margin:-25px 0;width:20px" alt="">
+      <a class="sl-social" href="mailto:hello@scottylabs.org" style="width:95px;display:flex;align-items:center;transition:0.1s background-color ease-out" style-hover="background-color:gray">
+        <div style="margin:auto;text-align:center"><img src="apps/web/app/assets/icons/socials/email.svg" style="height:30px;margin:auto;display:block;transition:0.1s all" alt=""><div class="sl-social-label" style="font-size:0.875rem;color:hsl(0,0%,0%);height:15px;transition:0.1s all">Email us!</div></div>
+      </a>
+    </div>
+  </footer>
+</div>
+</x-dc>
+</body>
+</html>

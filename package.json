@@ -1,0 +1,16 @@
+{
+  "name": "scottylabs-invites",
+  "private": true,
+  "version": "1.0.0",
+  "description": "ScottyLabs Invites — Luma-style event signup system for ScottyLabs at invite.scottylabs.org",
+  "scripts": {
+    "dev": "pnpm --parallel --filter @scottylabs-invites/backend --filter @scottylabs-invites/web dev",
+    "build": "pnpm --filter @scottylabs-invites/web build",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @scottylabs-invites/backend db:generate"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@9.15.0"
+}

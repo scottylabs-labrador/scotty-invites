@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Medium.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Bold.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Black.woff2') format('woff2');font-weight:900;font-display:swap}
+@font-face{font-family:'JetBrainsMono';src:url('apps/web/app/assets/fonts/JetBrainsMono-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
+html,body{margin:0;min-height:100%;font-family:Satoshi,system-ui,Avenir,Helvetica,Arial,sans-serif;font-weight:500;background:#fff;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{text-decoration:none;color:hsl(0,0%,0%)}a:hover{color:hsl(0,0%,0%)}
+.sl-social:hover img{filter:invert(1)}.sl-social:hover .sl-social-label{color:hsl(0,0%,93%) !important}.sl-social:active{filter:brightness(80%)}
+@keyframes sl-scanline{0%{top:12%}50%{top:82%}100%{top:12%}}
+</style>
+</helmet>
+<div data-screen-label="Check-in scanner" style="min-width:0;display:flex;flex-direction:column;min-height:100vh">
+  <header style="position:sticky;top:0;background:#fff;border-bottom:1px solid #c7d2dc;z-index:999">
+    <div style="max-width:1200px;margin-inline:auto;padding:0 clamp(16px,4.5vw,40px);min-height:64px;display:flex;align-items:stretch;flex-wrap:wrap;column-gap:24px;box-sizing:border-box">
+      <a href="Events Home.dc.html" style="display:flex;gap:10px;align-items:center;padding:14px 0">
+        <img src="apps/web/app/assets/scottylabs-logo.svg" style="height:26px" alt="">
+        <div style="font-size:17px;font-weight:700;letter-spacing:-0.025em;color:#1e1e1e;white-space:nowrap">ScottyLabs Invites</div>
+      </a>
+      <nav style="display:flex;gap:18px;align-items:stretch;font-family:Inter,sans-serif">
+        <a href="Events Home.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f;box-shadow:none" style-hover="color:#1e1e1e">Browse</a>
+        <a href="Ticket.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f;box-shadow:none" style-hover="color:#1e1e1e">My tickets</a>
+        <a href="Organizer Dashboard.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:600;color:#0d89be;box-shadow:inset 0 -2px 0 #0e96d1">Organize</a>
+        <a href="Admin Portal.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f;box-shadow:none" style-hover="color:#1e1e1e">Admin</a>
+      </nav>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-family:Inter,sans-serif;padding:11px 0">
+        <a href="Current Events Page.dc.html" style="display:flex;align-items:center;gap:5px;font-size:12.5px;font-weight:500;color:#5f6f7f" style-hover="color:#1e1e1e">scottylabs.org<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"></path><path d="M7 7h10v10"></path></svg></a>
+        <a href="Create Event.dc.html" style="display:flex;align-items:center;gap:6px;background:#1e1e1e;color:#fff;font-size:13px;font-weight:600;padding:8px 18px;border-radius:100px;transition:background-color 120ms cubic-bezier(0.2,0,0,1)" style-hover="background-color:#383838;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>Create event</a>
+        <a href="Sign In.dc.html" style="width:32px;height:32px;border-radius:100px;background:#e7f5fa;color:#0a6b94;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700" title="jtartan@andrew.cmu.edu — signed in via email link">JT</a>
+      </div>
+    </div>
+  </header>
+  <main style="flex-grow:1;background:#f0f4f8">
+    <section style="padding-inline:clamp(16px,4.5vw,40px);margin-inline:auto;max-width:1200px;box-sizing:border-box;padding-bottom:64px">
+      <div style="display:flex;align-items:center;gap:16px;margin-top:36px">
+        <div>
+          <h1 style="margin:0;font-size:1.75rem;font-weight:700;letter-spacing:-0.02em;color:hsl(0,0%,0%)">Door check-in</h1>
+          <div style="margin-top:6px;font-family:Inter,sans-serif;font-size:13px;color:#5f6f7f">Foundry committee · Founder Party · Door A · Scanning as jtartan · <a href="Organizer Dashboard.dc.html" style="color:#0d89be;font-weight:500">Back to dashboard</a></div>
+        </div>
+        <div style="margin-left:auto;font-family:Inter,sans-serif;font-size:12px;color:#5f6f7f;background:#fff;border:1px solid #c7d2dc;border-radius:100px;padding:8px 16px">Tap the camera to simulate a scan</div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:32px;margin-top:28px;align-items:flex-start;font-family:Inter,sans-serif">
+        <div style="display:flex;flex-direction:column;gap:16px;flex:1 1 240px;max-width:340px">
+          <div style="background:#fff;border:1px solid #c7d2dc;border-radius:12px;padding:18px 20px;box-shadow:0 1px 2px rgba(30,30,30,0.06)">
+            <div style="font-size:12px;font-weight:600;color:#5f6f7f">Checked in</div>
+            <div style="font-family:Satoshi,sans-serif;font-size:30px;font-weight:700;color:#1e1e1e;margin-top:6px">{{ checkedIn }} <span style="font-family:Inter,sans-serif;font-size:14px;font-weight:500;color:#7a8fa3">/ 120</span></div>
+            <div style="height:5px;background:#e9ebf8;border-radius:100px;margin-top:10px;overflow:hidden"><div style="{{ doorBar }}"></div></div>
+          </div>
+          <div style="background:#fff;border:1px solid #c7d2dc;border-radius:12px;padding:18px 20px;box-shadow:0 1px 2px rgba(30,30,30,0.06);display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;font-size:13px;color:#4a5662"><span>+1 guests arrived</span><span style="margin-left:auto;font-weight:600;color:#1e1e1e">{{ plusOnes }} of 26</span></div>
+            <div style="display:flex;font-size:13px;color:#4a5662"><span>Waitlist walk-ins</span><span style="margin-left:auto;font-weight:600;color:#1e1e1e">4</span></div>
+            <div style="display:flex;font-size:13px;color:#4a5662"><span>Turned away</span><span style="margin-left:auto;font-weight:600;color:#1e1e1e">2</span></div>
+          </div>
+        </div>
+        <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="390px,780px">
+          <div style="height:100%;display:flex;flex-direction:column;background:#0a0a0a;font-family:Inter,sans-serif">
+            <div style="padding:58px 18px 10px;display:flex;align-items:center;gap:8px">
+              <img src="apps/web/app/assets/scottylabs-logo.svg" style="height:18px;filter:brightness(0) invert(1)" alt="">
+              <div>
+                <div style="font-size:13px;font-weight:600;color:#fff">Founder Party</div>
+                <div style="font-size:10px;color:rgba(255,255,255,0.55)">Door A · check-in</div>
+              </div>
+              <span style="margin-left:auto;font-family:JetBrainsMono,monospace;font-size:11px;color:#5eb9e0">{{ counterLabel }}</span>
+            </div>
+            <button onClick="{{ simulateScan }}" style="all:unset;cursor:pointer;position:relative;margin:6px 14px 0;border-radius:18px;overflow:hidden;flex:1;background:radial-gradient(340px 240px at 30% 20%, #1d2b36, #0d1319 70%),radial-gradient(280px 200px at 80% 85%, #16222c, transparent)">
+              <div style="position:absolute;inset:0;background:radial-gradient(240px 160px at 60% 45%, rgba(14,150,209,0.12), transparent)"></div>
+              <div style="position:absolute;left:12%;right:12%;height:2px;background:linear-gradient(90deg,transparent,rgba(94,185,224,0.9),transparent);animation:sl-scanline 3s ease-in-out infinite;top:12%"></div>
+              <div style="position:absolute;top:14%;left:14%;width:34px;height:34px;border-top:3px solid #fff;border-left:3px solid #fff;border-radius:6px 0 0 0;opacity:0.9"></div>
+              <div style="position:absolute;top:14%;right:14%;width:34px;height:34px;border-top:3px solid #fff;border-right:3px solid #fff;border-radius:0 6px 0 0;opacity:0.9"></div>
+              <div style="position:absolute;bottom:14%;left:14%;width:34px;height:34px;border-bottom:3px solid #fff;border-left:3px solid #fff;border-radius:0 0 0 6px;opacity:0.9"></div>
+              <div style="position:absolute;bottom:14%;right:14%;width:34px;height:34px;border-bottom:3px solid #fff;border-right:3px solid #fff;border-radius:0 0 6px 0;opacity:0.9"></div>
+              <div style="position:absolute;left:0;right:0;bottom:5%;text-align:center;font-size:11px;color:rgba(255,255,255,0.5)">Point at a Scotty Invite QR</div>
+            </button>
+            <sc-if value="{{ hasResult }}" hint-placeholder-val="{{ true }}">
+              <div style="{{ resultStyle }}">
+                <div style="display:flex;align-items:center;gap:12px">
+                  <div style="{{ resultIconWrap }}">{{ resultIcon }}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:15px;font-weight:700;color:#fff">{{ resultName }}</div>
+                    <div style="font-size:11px;color:rgba(255,255,255,0.65);margin-top:2px;font-family:JetBrainsMono,monospace">{{ resultMeta }}</div>
+                  </div>
+                  <span style="{{ resultChip }}">{{ resultChipLabel }}</span>
+                </div>
+                <div style="font-size:11.5px;color:rgba(255,255,255,0.7);margin-top:10px;line-height:1.45">{{ resultNote }}</div>
+              </div>
+            </sc-if>
+            <div style="padding:12px 14px 10px;display:flex;gap:10px">
+              <div style="flex:1;display:flex;align-items:center;gap:8px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.14);border-radius:100px;padding:11px 16px;font-size:12.5px;color:rgba(255,255,255,0.55)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                Look up andrew ID
+              </div>
+              <button style="all:unset;cursor:pointer;width:42px;height:42px;border-radius:100px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.14);display:flex;align-items:center;justify-content:center;color:rgba(255,255,255,0.8)" style-hover="background-color:rgba(255,255,255,0.16)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6c0 2-2 3-2 5v7a2 2 0 0 1-2 2h-4a2 2 0 0 1-2-2v-7c0-2-2-3-2-5V2h12z"></path><line x1="6" y1="6" x2="18" y2="6"></line></svg>
+              </button>
+            </div>
+          </div>
+        </x-import>
+        <div style="background:#fff;border:1px solid #c7d2dc;border-radius:12px;box-shadow:0 1px 2px rgba(30,30,30,0.06);overflow:hidden;flex:1 1 280px;max-width:400px">
+          <div style="padding:16px 20px;border-bottom:1px solid #e9ebf8;font-family:Satoshi,sans-serif;font-size:17px;font-weight:700;color:#1e1e1e">Recent scans</div>
+          <sc-for list="{{ recent }}" as="r" hint-placeholder-count="6">
+            <div style="display:flex;align-items:center;gap:10px;padding:11px 20px;border-bottom:1px solid #e9ebf8;font-size:13px">
+              <div style="{{ r.dotStyle }}"></div>
+              <div style="font-weight:600;color:#1e1e1e">{{ r.name }}</div>
+              <div style="font-family:JetBrainsMono,monospace;font-size:11px;color:#7a8fa3">{{ r.num }}</div>
+              <div style="margin-left:auto;font-size:11.5px;color:#7a8fa3">{{ r.time }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer style="border-top:1px solid #c7d2dc;background:#fff">
+    <div style="max-width:1200px;margin-inline:auto;padding:14px clamp(16px,4.5vw,40px);display:flex;align-items:center;gap:10px 24px;flex-wrap:wrap;box-sizing:border-box;font-family:Inter,sans-serif;font-size:13px;color:#5f6f7f">
+      <div>Designed, developed and maintained with ❤️ by ScottyLabs.</div>
+      <div style="margin-left:auto;display:flex;gap:18px;font-weight:500">
+        <a href="Current Events Page.dc.html" style="color:#0d89be">scottylabs.org</a>
+        <a href="Architecture.dc.html" style="color:#0d89be">Architecture</a>
+        <a href="#" style="color:#0d89be">GitHub</a>
+        <a href="Sign In.dc.html" style="color:#0d89be">Sign in</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1280}}">
+class Component extends DCLogic {
+  state = {
+    step: 0,
+    checkedIn: 63,
+    plusOnes: 18,
+    recent: [
+      { name: "Ava Rodriguez", num: "Nº 041", time: "7:51 PM", kind: "ok" },
+      { name: "Dev Shah", num: "Nº 023+1", time: "7:49 PM", kind: "plus" },
+      { name: "Maya Okafor", num: "Nº 012", time: "7:48 PM", kind: "ok" },
+      { name: "Priya Iyer", num: "Nº 067", time: "7:44 PM", kind: "ok" },
+      { name: "Unknown code", num: "—", time: "7:41 PM", kind: "bad" },
+      { name: "Leo Martins", num: "Nº 055", time: "7:39 PM", kind: "ok" },
+    ],
+  };
+  scans = [
+    { kind: "success", name: "Jane Tartan", num: "Nº 088", meta: "SIT-088-JTARTAN · IS 2027", chip: "Approved", note: "+1 invite attached — not claimed yet. Checked in.", time: "7:53 PM" },
+    { kind: "plusone", name: "Alex Chen (+1 of Jane Tartan)", num: "Nº 088+1", meta: "SIT-088-P1 · guest", chip: "+1 guest", note: "Transferred invite — counts against Jane's pass. Checked in.", time: "7:54 PM" },
+    { kind: "duplicate", name: "Dev Shah", num: "Nº 023", meta: "SIT-023-DSHAH2 · CS 2028", chip: "Already in", note: "This invite was scanned at 7:49 PM at Door A.", time: "7:55 PM" },
+    { kind: "denied", name: "Code not recognized", num: "—", meta: "Unknown QR payload", chip: "Not on list", note: "Send them to the registration table — walk-ins join the waitlist.", time: "7:56 PM" },
+  ];
+  renderVals() {
+    const idle = this.state.step === 0;
+    const scan = idle ? null : this.scans[(this.state.step - 1) % this.scans.length];
+    const palettes = {
+      success: { bg: "rgba(58,154,76,0.16)", border: "rgba(58,154,76,0.5)", icon: "#3a9a4c", chipBg: "#3a9a4c", chipFg: "#fff" },
+      plusone: { bg: "rgba(14,150,209,0.14)", border: "rgba(14,150,209,0.5)", icon: "#0e96d1", chipBg: "#0e96d1", chipFg: "#fff" },
+      duplicate: { bg: "rgba(232,177,58,0.14)", border: "rgba(232,177,58,0.5)", icon: "#e8b13a", chipBg: "#e8b13a", chipFg: "#1e1e1e" },
+      denied: { bg: "rgba(215,36,68,0.16)", border: "rgba(215,36,68,0.55)", icon: "#d72444", chipBg: "#d72444", chipFg: "#fff" },
+    };
+    const p = scan ? palettes[scan.kind] : palettes.success;
+    const iconPaths = {
+      success: React.createElement("polyline", { points: "20 6 9 17 4 12" }),
+      plusone: [React.createElement("line", { key: 1, x1: 12, y1: 5, x2: 12, y2: 19 }), React.createElement("line", { key: 2, x1: 5, y1: 12, x2: 19, y2: 12 })],
+      duplicate: [React.createElement("circle", { key: 1, cx: 12, cy: 12, r: 10 }), React.createElement("polyline", { key: 2, points: "12 6 12 12 16 14" })],
+      denied: [React.createElement("line", { key: 1, x1: 18, y1: 6, x2: 6, y2: 18 }), React.createElement("line", { key: 2, x1: 6, y1: 6, x2: 18, y2: 18 })],
+    };
+    const dot = { ok: "#3a9a4c", plus: "#0e96d1", bad: "#d72444", dup: "#e8b13a" };
+    return {
+      counterLabel: `${this.state.checkedIn} / 120 in`,
+      checkedIn: this.state.checkedIn,
+      plusOnes: this.state.plusOnes,
+      doorBar: `height:5px;width:${(this.state.checkedIn / 120) * 100}%;background:#3a9a4c;border-radius:100px`,
+      simulateScan: () => this.setState((s) => {
+        const next = this.scans[s.step % this.scans.length];
+        const inc = next.kind === "success" || next.kind === "plusone";
+        return {
+          step: s.step + 1,
+          checkedIn: s.checkedIn + (inc ? 1 : 0),
+          plusOnes: s.plusOnes + (next.kind === "plusone" ? 1 : 0),
+          recent: [{ name: next.name.split(" (")[0], num: next.num, time: next.time, kind: next.kind === "success" ? "ok" : next.kind === "plusone" ? "plus" : next.kind === "duplicate" ? "dup" : "bad" }, ...s.recent].slice(0, 6),
+        };
+      }),
+      hasResult: !idle,
+      resultStyle: scan ? `margin:12px 14px 0;border-radius:14px;padding:14px 16px;background:${p.bg};border:1px solid ${p.border}` : "",
+      resultIconWrap: `flex:none;width:34px;height:34px;border-radius:100px;background:${p.icon};display:flex;align-items:center;justify-content:center;color:${scan && scan.kind === "duplicate" ? "#1e1e1e" : "#fff"}`,
+      resultIcon: scan ? React.createElement("svg", { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 2.5, strokeLinecap: "round", strokeLinejoin: "round" }, iconPaths[scan.kind]) : null,
+      resultName: scan ? scan.name : "",
+      resultMeta: scan ? scan.meta : "",
+      resultChip: scan ? `flex:none;font-size:10px;font-weight:700;color:${p.chipFg};background:${p.chipBg};border-radius:100px;padding:4px 10px` : "",
+      resultChipLabel: scan ? scan.chip : "",
+      resultNote: scan ? scan.note : "",
+      recent: this.state.recent.map((r) => ({ ...r, dotStyle: `flex:none;width:8px;height:8px;border-radius:100px;background:${dot[r.kind] || "#3a9a4c"}` })),
+    };
+  }
+}
+</script>
+</body>
+</html>

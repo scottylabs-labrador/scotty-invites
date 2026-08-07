@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Medium.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Bold.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Black.woff2') format('woff2');font-weight:900;font-display:swap}
+@font-face{font-family:'JetBrainsMono';src:url('apps/web/app/assets/fonts/JetBrainsMono-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
+html,body{margin:0;min-height:100%;font-family:Satoshi,system-ui,Avenir,Helvetica,Arial,sans-serif;font-weight:500;background:#fff;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{text-decoration:none;color:hsl(0,0%,0%)}a:hover{color:hsl(0,0%,0%)}
+.sl-social:hover img{filter:invert(1)}.sl-social:hover .sl-social-label{color:hsl(0,0%,93%) !important}.sl-social:active{filter:brightness(80%)}
+</style>
+</helmet>
+<div data-screen-label="My tickets — Scotty Invite" style="min-width:0;display:flex;flex-direction:column;min-height:100vh">
+  <header style="position:sticky;top:0;background:#fff;border-bottom:1px solid #c7d2dc;z-index:999">
+    <div style="max-width:1200px;margin-inline:auto;padding:0 clamp(16px,4.5vw,40px);min-height:64px;display:flex;align-items:stretch;flex-wrap:wrap;column-gap:24px;box-sizing:border-box">
+      <a href="Events Home.dc.html" style="display:flex;gap:10px;align-items:center;padding:14px 0">
+        <img src="apps/web/app/assets/scottylabs-logo.svg" style="height:26px" alt="">
+        <div style="font-size:17px;font-weight:700;letter-spacing:-0.025em;color:#1e1e1e;white-space:nowrap">ScottyLabs Invites</div>
+      </a>
+      <nav style="display:flex;gap:18px;align-items:stretch;font-family:Inter,sans-serif">
+        <a href="Events Home.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f;box-shadow:none" style-hover="color:#1e1e1e">Browse</a>
+        <a href="Ticket.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:600;color:#0d89be;box-shadow:inset 0 -2px 0 #0e96d1">My tickets</a>
+        <a href="Organizer Dashboard.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f;box-shadow:none" style-hover="color:#1e1e1e">Organize</a>
+        <a href="Admin Portal.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f;box-shadow:none" style-hover="color:#1e1e1e">Admin</a>
+      </nav>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-family:Inter,sans-serif;padding:11px 0">
+        <a href="Current Events Page.dc.html" style="display:flex;align-items:center;gap:5px;font-size:12.5px;font-weight:500;color:#5f6f7f" style-hover="color:#1e1e1e">scottylabs.org<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"></path><path d="M7 7h10v10"></path></svg></a>
+        <a href="Create Event.dc.html" style="display:flex;align-items:center;gap:6px;background:#1e1e1e;color:#fff;font-size:13px;font-weight:600;padding:8px 18px;border-radius:100px;transition:background-color 120ms cubic-bezier(0.2,0,0,1)" style-hover="background-color:#383838;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>Create event</a>
+        <a href="Sign In.dc.html" style="width:32px;height:32px;border-radius:100px;background:#e7f5fa;color:#0a6b94;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700" title="jtartan@andrew.cmu.edu — signed in via email link">JT</a>
+      </div>
+    </div>
+  </header>
+  <main style="flex-grow:1;background:#f8fafc">
+    <section style="padding-inline:clamp(16px,4.5vw,40px);margin-inline:auto;max-width:1200px;box-sizing:border-box">
+      <h1 style="margin:44px 0 0;font-size:2.25rem;font-weight:700;letter-spacing:-0.02em;color:hsl(0,0%,0%)">My tickets</h1>
+      <p style="margin:8px 0 0;font-size:1rem;color:hsl(0,0%,35%)">Your Scotty Invites — numbered, scannable, and yours to keep.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:48px;margin-top:32px;padding-bottom:72px;align-items:flex-start">
+        <div style="display:flex;flex-direction:column;gap:16px;flex:0 1 420px;min-width:300px">
+          <div style="background:#0a0a0a;border-radius:20px;overflow:hidden;box-shadow:0 20px 48px rgba(6,63,88,0.28);position:relative">
+            <div style="padding:18px 22px;display:flex;align-items:center;gap:10px">
+              <img src="apps/web/app/assets/scottylabs-logo.svg" style="height:22px;filter:brightness(0) invert(1)" alt="">
+              <span style="font-family:Inter,sans-serif;font-size:11px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.75)">Scotty invite</span>
+              <span style="margin-left:auto;font-family:JetBrainsMono,monospace;font-size:12px;color:rgba(255,255,255,0.9)">{{ ticketNum }}</span>
+            </div>
+            <div style="{{ artBand }}">
+              <div style="font-family:Inter,sans-serif;font-size:10px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.85)">ScottyLabs Foundry</div>
+              <div style="font-size:26px;font-weight:700;color:#fff;letter-spacing:-0.02em;line-height:1.15;margin-top:4px">Founder Party</div>
+              <span style="{{ statusChip }}">{{ statusLabel }}</span>
+            </div>
+            <div style="padding:20px 22px;display:grid;grid-template-columns:1fr 1fr;gap:16px;font-family:Inter,sans-serif">
+              <div><div style="font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.5)">Date</div><div style="font-size:15px;font-weight:600;color:#fff;margin-top:3px">Fri, Sep 11</div></div>
+              <div><div style="font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.5)">Doors</div><div style="font-size:15px;font-weight:600;color:#fff;margin-top:3px">7:00 PM EDT</div></div>
+              <div><div style="font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.5)">Location</div><div style="font-size:15px;font-weight:600;color:#fff;margin-top:3px">Tepper 2713</div></div>
+              <div><div style="font-size:10px;font-weight:600;letter-spacing:0.12em;text-transform:uppercase;color:rgba(255,255,255,0.5)">Guest</div><div style="font-size:15px;font-weight:600;color:#fff;margin-top:3px">Jane Tartan <span style="color:rgba(255,255,255,0.55);font-weight:500">+1</span></div></div>
+            </div>
+            <div style="position:relative;height:24px">
+              <div style="position:absolute;left:22px;right:22px;top:50%;border-top:2px dashed rgba(255,255,255,0.25)"></div>
+              <div style="position:absolute;left:-12px;top:0;width:24px;height:24px;border-radius:100px;background:#f8fafc"></div>
+              <div style="position:absolute;right:-12px;top:0;width:24px;height:24px;border-radius:100px;background:#f8fafc"></div>
+            </div>
+            <div style="padding:22px;display:flex;flex-direction:column;align-items:center;gap:10px">
+              <sc-if value="{{ qrVisible }}" hint-placeholder-val="{{ true }}">
+                <div style="background:#fff;border-radius:12px;padding:14px">{{ qr }}</div>
+                <div style="font-family:JetBrainsMono,monospace;font-size:11px;color:rgba(255,255,255,0.65)">{{ ticketCode }}</div>
+                <div style="font-family:Inter,sans-serif;font-size:12px;color:rgba(255,255,255,0.5)">Scan at the door</div>
+                <div style="font-family:JetBrainsMono,monospace;font-size:10px;color:rgba(255,255,255,0.45)">questions? foundry@scottylabs.org</div>
+              </sc-if>
+              <sc-if value="{{ qrLocked }}" hint-placeholder-val="{{ false }}">
+                <div style="width:176px;height:176px;border:1.5px dashed rgba(255,255,255,0.3);border-radius:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:rgba(255,255,255,0.6)">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                  <span style="font-family:Inter,sans-serif;font-size:12px;text-align:center;max-width:130px">Your QR unlocks once you're approved</span>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+          <div style="display:flex;gap:10px">
+            <button style="all:unset;cursor:pointer;flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:#000;color:#fff;font-family:Inter,sans-serif;font-size:13px;font-weight:600;padding:12px 0;border-radius:10px;transition:background-color 120ms" style-hover="background-color:#383838">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+              Add to Apple Wallet
+            </button>
+            <button style="all:unset;cursor:pointer;flex:1;display:flex;align-items:center;justify-content:center;gap:8px;background:#1f1f1f;color:#fff;border:1px solid #1f1f1f;font-family:Inter,sans-serif;font-size:13px;font-weight:600;padding:12px 0;border-radius:10px;transition:background-color 120ms" style-hover="background-color:#383838">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+              Save to Google Wallet
+            </button>
+          </div>
+          <div style="font-family:Inter,sans-serif;font-size:11px;color:#7a8fa3;text-align:center">Issued as real passes — PKPass and Google Wallet objects. <a href="Architecture.dc.html" style="color:#0d89be">See how</a></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:24px;font-family:Inter,sans-serif;flex:1 1 400px;min-width:0">
+          <div style="background:#fff;border:1px solid #c7d2dc;border-radius:12px;padding:22px 24px;box-shadow:0 1px 2px rgba(30,30,30,0.06)">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="font-family:Satoshi,sans-serif;font-size:18px;font-weight:700;color:#1e1e1e">Your +1 invite</div>
+              <span style="font-size:11px;font-weight:600;color:#0a6b94;background:#e7f5fa;border:1px solid #b4def1;border-radius:4px;padding:3px 8px">Transferable</span>
+            </div>
+            <p style="margin:8px 0 0;font-size:13px;line-height:1.5;color:#5f6f7f;max-width:460px">Send this link to a friend — it becomes their own Scotty Invite, tied to yours. One transfer per invite.</p>
+            <div style="margin-top:14px;display:flex;gap:10px;max-width:520px">
+              <div style="flex:1;display:flex;align-items:center;font-family:JetBrainsMono,monospace;font-size:13px;color:#38424b;padding:10px 14px;border:1px solid #c7d2dc;border-radius:6px;background:#f0f4f8;overflow:hidden;white-space:nowrap">scty.li/inv/088-P1</div>
+              <button onClick="{{ copyInvite }}" style="all:unset;cursor:pointer;display:flex;align-items:center;gap:7px;background:#0e96d1;color:#fff;font-size:13px;font-weight:600;padding:0 20px;border-radius:100px;transition:background-color 120ms" style-hover="background-color:#0d89be" style-active="transform:scale(0.97)">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                {{ copyInviteLabel }}
+              </button>
+            </div>
+            <button style="all:unset;cursor:pointer;margin-top:12px;font-size:12px;font-weight:500;color:#7a8fa3" style-hover="color:#d72444">Revoke +1 link</button>
+          </div>
+          <div>
+            <div style="display:flex;align-items:baseline;gap:10px;border-bottom:1px solid #e9ebf8;padding-bottom:10px">
+              <div style="font-family:Satoshi,sans-serif;font-size:18px;font-weight:700;color:#1e1e1e">Stub wall</div>
+              <span style="font-size:12px;color:#7a8fa3">Every invite you've used stays yours.</span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;margin-top:16px">
+              <sc-for list="{{ stubs }}" as="s" hint-placeholder-count="3">
+                <div style="{{ s.style }}">
+                  <div style="display:flex;justify-content:space-between;align-items:center">
+                    <img src="apps/web/app/assets/scottylabs-logo.svg" style="height:18px;filter:brightness(0) invert(1);opacity:0.9" alt="">
+                    <span style="font-family:JetBrainsMono,monospace;font-size:9px;color:rgba(255,255,255,0.85)">{{ s.num }}</span>
+                  </div>
+                  <div style="margin-top:26px">
+                    <div style="font-size:15px;font-weight:700;color:#fff;letter-spacing:-0.01em;line-height:1.2">{{ s.title }}</div>
+                    <div style="font-family:JetBrainsMono,monospace;font-size:9px;color:rgba(255,255,255,0.8);margin-top:5px">{{ s.date }}</div>
+                  </div>
+                  <div style="margin-top:14px;border-top:1.5px dashed rgba(255,255,255,0.4);padding-top:9px;display:flex;align-items:center;gap:6px;font-size:10px;font-weight:600;color:rgba(255,255,255,0.9)">
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    Checked in
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer style="border-top:1px solid #c7d2dc;background:#fff">
+    <div style="max-width:1200px;margin-inline:auto;padding:14px clamp(16px,4.5vw,40px);display:flex;align-items:center;gap:10px 24px;flex-wrap:wrap;box-sizing:border-box;font-family:Inter,sans-serif;font-size:13px;color:#5f6f7f">
+      <div>Designed, developed and maintained with ❤️ by ScottyLabs.</div>
+      <div style="margin-left:auto;display:flex;gap:18px;font-weight:500">
+        <a href="Current Events Page.dc.html" style="color:#0d89be">scottylabs.org</a>
+        <a href="Architecture.dc.html" style="color:#0d89be">Architecture</a>
+        <a href="#" style="color:#0d89be">GitHub</a>
+        <a href="Sign In.dc.html" style="color:#0d89be">Sign in</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1280}, &quot;ticketStatus&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;approved&quot;, &quot;options&quot;: [&quot;approved&quot;, &quot;pending&quot;, &quot;checked-in&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Ticket&quot;}, &quot;artwork&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;brand&quot;, &quot;options&quot;: [&quot;brand&quot;, &quot;cool&quot;, &quot;warm&quot;, &quot;sunset&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Ticket&quot;}}">
+class Component extends DCLogic {
+  state = { copied: false };
+  buildQr(size) {
+    const n = 25, cell = Math.floor(size / n);
+    let seed = 8842;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+    const cells = [];
+    const finder = (fx, fy) => {
+      for (let y = 0; y < 7; y++) for (let x = 0; x < 7; x++) {
+        const ring = x === 0 || y === 0 || x === 6 || y === 6;
+        const core = x >= 2 && x <= 4 && y >= 2 && y <= 4;
+        if (ring || core) cells.push([fx + x, fy + y]);
+      }
+    };
+    finder(0, 0); finder(n - 7, 0); finder(0, n - 7);
+    for (let i = 8; i < n - 8; i += 2) { cells.push([i, 6]); cells.push([6, i]); }
+    const inFinder = (x, y) => (x < 8 && y < 8) || (x >= n - 8 && y < 8) || (x < 8 && y >= n - 8);
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+      if (inFinder(x, y) || x === 6 || y === 6) continue;
+      if (rnd() < 0.44) cells.push([x, y]);
+    }
+    return React.createElement("svg", { width: size, height: size, viewBox: `0 0 ${n * cell} ${n * cell}`, style: { display: "block" } },
+      cells.map(([x, y], i) => React.createElement("rect", { key: i, x: x * cell, y: y * cell, width: cell, height: cell, fill: "#0a0a0a" })));
+  }
+  renderVals() {
+    const status = this.props.ticketStatus ?? "approved";
+    const grads = {
+      brand: "conic-gradient(from 180deg at 50% 50%, #d72444 0%, #8766d4 25%, #0e96d1 55%, #063f58 80%, #d72444 100%)",
+      cool: "linear-gradient(135deg,#0e96d1 0%,#6940c9 100%)",
+      warm: "linear-gradient(135deg,#d72444 0%,#8766d4 100%)",
+      sunset: "linear-gradient(135deg,#e8b13a 0%,#df6f3c 50%,#d72444 100%)",
+    };
+    const art = grads[this.props.artwork ?? "brand"] || grads.brand;
+    const chip = {
+      approved: "position:absolute;top:18px;right:20px;font-family:Inter,sans-serif;font-size:11px;font-weight:600;color:#0d4b17;background:#e9f5ec;border-radius:100px;padding:4px 12px",
+      pending: "position:absolute;top:18px;right:20px;font-family:Inter,sans-serif;font-size:11px;font-weight:600;color:#654a00;background:#fdf3e4;border-radius:100px;padding:4px 12px",
+      "checked-in": "position:absolute;top:18px;right:20px;font-family:Inter,sans-serif;font-size:11px;font-weight:600;color:#fff;background:#3a9a4c;border-radius:100px;padding:4px 12px",
+    }[status];
+    const label = { approved: "Approved", pending: "Pending approval", "checked-in": "Checked in · 7:42 PM" }[status];
+    const stubGrad = [grads.warm, grads.cool, grads.sunset];
+    const stubs = [
+      { title: "TartanHacks 2026", date: "FEB 06 2026", num: "Nº 1204" },
+      { title: "Bootcamp: Intro to React", date: "MAR 24 2026", num: "Nº 031" },
+      { title: "Committee work session", date: "APR 18 2026", num: "Nº 067" },
+    ].map((s, i) => ({ ...s, style: `background:${stubGrad[i % 3]};border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;box-shadow:0 2px 8px rgba(30,30,30,0.08)` }));
+    return {
+      ticketNum: "Nº 088",
+      ticketCode: "SIT-088-JTARTAN",
+      artBand: `position:relative;background:${art};padding:24px 22px 20px`,
+      statusChip: chip,
+      statusLabel: label,
+      qrVisible: status !== "pending",
+      qrLocked: status === "pending",
+      qr: this.buildQr(150),
+      stubs,
+      copyInvite: () => { this.setState({ copied: true }); setTimeout(() => this.setState({ copied: false }), 1600); },
+      copyInviteLabel: this.state.copied ? "Copied!" : "Copy link",
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Medium.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Bold.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Black.woff2') format('woff2');font-weight:900;font-display:swap}
+@font-face{font-family:'JetBrainsMono';src:url('apps/web/app/assets/fonts/JetBrainsMono-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
+html,body{margin:0;min-height:100%;font-family:Satoshi,system-ui,Avenir,Helvetica,Arial,sans-serif;font-weight:500;background:#fff;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{text-decoration:none;color:#0d89be}a:hover{color:#0a6b94}
+</style>
+</helmet>
+<div data-screen-label="Architecture — Postgres + services" style="display:flex;flex-direction:column;min-height:100vh">
+  <header style="position:sticky;top:0;background:#fff;border-bottom:1px solid #c7d2dc;z-index:999">
+    <div style="max-width:1200px;margin-inline:auto;padding:0 clamp(16px,4.5vw,40px);min-height:64px;display:flex;align-items:stretch;flex-wrap:wrap;column-gap:24px;box-sizing:border-box">
+      <a href="Events Home.dc.html" style="display:flex;gap:10px;align-items:center;padding:14px 0">
+        <img src="apps/web/app/assets/scottylabs-logo.svg" style="height:26px" alt="">
+        <div style="font-size:17px;font-weight:700;letter-spacing:-0.025em;color:#1e1e1e;white-space:nowrap">ScottyLabs Invites</div>
+      </a>
+      <nav style="display:flex;gap:18px;align-items:stretch;font-family:Inter,sans-serif">
+        <a href="Events Home.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f" style-hover="color:#1e1e1e">Browse</a>
+        <a href="Ticket.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f" style-hover="color:#1e1e1e">My tickets</a>
+        <a href="Organizer Dashboard.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f" style-hover="color:#1e1e1e">Organize</a>
+        <a href="Admin Portal.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f" style-hover="color:#1e1e1e">Admin</a>
+      </nav>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-family:Inter,sans-serif;padding:11px 0">
+        <a href="Current Events Page.dc.html" style="display:flex;align-items:center;gap:5px;font-size:12.5px;font-weight:500;color:#5f6f7f" style-hover="color:#1e1e1e">scottylabs.org<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"></path><path d="M7 7h10v10"></path></svg></a>
+        <a href="Sign In.dc.html" style="width:32px;height:32px;border-radius:100px;background:#e7f5fa;color:#0a6b94;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700" title="jtartan@andrew.cmu.edu — signed in via email link">JT</a>
+      </div>
+    </div>
+  </header>
+  <main style="flex-grow:1">
+    <section style="padding-inline:clamp(16px,4.5vw,40px);margin-inline:auto;max-width:1200px;box-sizing:border-box;padding-bottom:80px">
+      <h1 style="margin:44px 0 0;font-size:2rem;font-weight:700;letter-spacing:-0.02em;color:hsl(0,0%,0%)">How invite.scottylabs.org fits together</h1>
+      <p style="margin:10px 0 0;font-family:Inter,sans-serif;font-size:14.5px;line-height:1.55;color:#4a5662;max-width:640px;text-wrap:pretty">Its own app, the same stack as scottylabs.org: one Fastify + Drizzle API, one Postgres, Mailgun for every email, signed wallet passes at the door. Handoff notes for whoever builds it.</p>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:28px;font-family:Inter,sans-serif">
+        <sc-for list="{{ stack }}" as="s" hint-placeholder-count="5">
+          <div style="flex:1 1 200px;background:#fff;border:1px solid #c7d2dc;border-radius:12px;padding:16px 18px;box-shadow:0 1px 2px rgba(30,30,30,0.06)">
+            <div style="font-family:JetBrainsMono,monospace;font-size:11px;color:#0a6b94">{{ s.code }}</div>
+            <div style="font-family:Satoshi,sans-serif;font-size:15px;font-weight:700;color:#1e1e1e;margin-top:6px">{{ s.name }}</div>
+            <div style="font-size:12px;line-height:1.5;color:#5f6f7f;margin-top:4px">{{ s.desc }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <h2 style="margin:40px 0 0;font-size:1.25rem;font-weight:700;letter-spacing:-0.01em;color:#1e1e1e">Three flows that matter</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:16px;font-family:Inter,sans-serif">
+        <sc-for list="{{ flows }}" as="f" hint-placeholder-count="3">
+          <div style="flex:1 1 320px;background:#f8fafc;border:1px solid #c7d2dc;border-radius:12px;padding:18px 20px">
+            <div style="font-family:Satoshi,sans-serif;font-size:15px;font-weight:700;color:#1e1e1e">{{ f.name }}</div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:12px">
+              <sc-for list="{{ f.steps }}" as="st" hint-placeholder-count="4">
+                <div style="display:flex;gap:10px;font-size:12.5px;line-height:1.5;color:#38424b">
+                  <span style="flex:none;width:18px;height:18px;border-radius:100px;background:#e7f5fa;color:#0a6b94;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;margin-top:1px">{{ st.n }}</span>
+                  <span style="text-wrap:pretty">{{ st.text }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:14px;margin-top:14px;font-family:Inter,sans-serif">
+        <div style="flex:1 1 420px;background:#0a0a0a;border-radius:12px;padding:18px 22px">
+          <div style="font-family:Inter,sans-serif;font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.6)">Who gets in</div>
+          <pre style="margin:10px 0 0;font-family:JetBrainsMono,monospace;font-size:12px;line-height:1.7;color:#5eb9e0;white-space:pre-wrap">ALLOWED = ['andrew.cmu.edu', 'cs.cmu.edu', 'cmu.edu']
+
+canSignIn(email) =
+     domain(email) ∈ ALLOWED
+  OR admins.domain_exempt          <span style="color:rgba(255,255,255,0.45)">-- super-admin invited</span>
+  OR ticket_transfers.token match  <span style="color:rgba(255,255,255,0.45)">-- claiming a +1</span></pre>
+        </div>
+        <div style="flex:1 1 320px;background:#f8fafc;border:1px solid #c7d2dc;border-radius:12px;padding:18px 20px">
+          <div style="font-family:Satoshi,sans-serif;font-size:15px;font-weight:700;color:#1e1e1e">One account per email</div>
+          <p style="margin:10px 0 0;font-size:12.5px;line-height:1.6;color:#38424b;text-wrap:pretty"><span style="font-family:JetBrainsMono,monospace;font-size:11.5px;color:#0a6b94">users.email</span> is <span style="font-family:JetBrainsMono,monospace;font-size:11.5px;color:#0a6b94">citext unique</span> — verifying a magic link upserts on the lowercased address, so signing in again lands in the same account with the same tickets. Sessions are httpOnly cookies (30-day rolling); sign out revokes the row and clears the cookie.</p>
+        </div>
+      </div>
+      <h2 style="margin:40px 0 0;font-size:1.25rem;font-weight:700;letter-spacing:-0.01em;color:#1e1e1e">Postgres schema</h2>
+      <p style="margin:8px 0 0;font-family:Inter,sans-serif;font-size:13px;color:#5f6f7f">Drizzle tables in <span style="font-family:JetBrainsMono,monospace;font-size:12px">apps/backend/src/db/schema.ts</span> — arrows are foreign keys.</p>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;margin-top:16px">
+        <sc-for list="{{ tables }}" as="t" hint-placeholder-count="12">
+          <div style="background:#fff;border:1px solid #c7d2dc;border-radius:10px;overflow:hidden;box-shadow:0 1px 2px rgba(30,30,30,0.06)">
+            <div style="padding:10px 14px;border-bottom:1px solid #e9ebf8;background:#f8fafc;display:flex;align-items:center;gap:8px">
+              <span style="font-family:JetBrainsMono,monospace;font-size:12.5px;font-weight:700;color:#1e1e1e">{{ t.name }}</span>
+              <span style="margin-left:auto;font-family:Inter,sans-serif;font-size:10.5px;color:#7a8fa3">{{ t.note }}</span>
+            </div>
+            <div style="padding:10px 14px;display:flex;flex-direction:column;gap:5px">
+              <sc-for list="{{ t.cols }}" as="c" hint-placeholder-count="5">
+                <div style="font-family:JetBrainsMono,monospace;font-size:11px;line-height:1.5;color:#38424b">{{ c }}</div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top:28px;font-family:Inter,sans-serif;display:flex;flex-wrap:wrap;gap:14px">
+        <div style="flex:1 1 400px;background:#f8fafc;border:1px solid #c7d2dc;border-radius:12px;padding:18px 20px">
+          <div style="font-family:Satoshi,sans-serif;font-size:15px;font-weight:700;color:#1e1e1e">Committee scoping, everywhere</div>
+          <p style="margin:10px 0 0;font-size:12.5px;line-height:1.6;color:#38424b;text-wrap:pretty">Every admin belongs to a committee — Foundry, Tech, Design, and the rest — or posts all-club as ScottyLabs; creating an event stamps <span style="font-family:JetBrainsMono,monospace;font-size:11.5px;color:#0a6b94">events.committee_id</span>. Dashboards, CSV exports, and pass stamps all filter on it — super admins see every committee, admins see their own.</p>
+        </div>
+        <div style="flex:1 1 400px;background:#f8fafc;border:1px solid #c7d2dc;border-radius:12px;padding:18px 20px">
+          <div style="font-family:Satoshi,sans-serif;font-size:15px;font-weight:700;color:#1e1e1e">Answers stay queryable</div>
+          <p style="margin:10px 0 0;font-size:12.5px;line-height:1.6;color:#38424b;text-wrap:pretty">Standard fields land in typed columns; per-event custom answers land in <span style="font-family:JetBrainsMono,monospace;font-size:11.5px;color:#0a6b94">answers.value jsonb</span> keyed by question. One <span style="font-family:JetBrainsMono,monospace;font-size:11.5px;color:#0a6b94">COPY</span> gives a committee its whole event as CSV — no spreadsheet chasing.</p>
+        </div>
+        <div style="flex:1 1 400px;background:#f8fafc;border:1px solid #c7d2dc;border-radius:12px;padding:18px 20px">
+          <div style="font-family:Satoshi,sans-serif;font-size:15px;font-weight:700;color:#1e1e1e">Status digests, on your schedule</div>
+          <p style="margin:10px 0 0;font-size:12.5px;line-height:1.6;color:#38424b;text-wrap:pretty">Each event lists an <span style="font-family:JetBrainsMono,monospace;font-size:11.5px;color:#0a6b94">updates_email</span>; Mailgun sends it an hourly, daily, or weekly digest of new signups and reviews waiting — anything pending over 24 hours escalates immediately. The pass's <span style="font-family:JetBrainsMono,monospace;font-size:11.5px;color:#0a6b94">contact_email</span> is separate, so guests always reach a human.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer style="border-top:1px solid #c7d2dc;background:#fff">
+    <div style="max-width:1200px;margin-inline:auto;padding:14px clamp(16px,4.5vw,40px);display:flex;align-items:center;gap:10px 24px;flex-wrap:wrap;box-sizing:border-box;font-family:Inter,sans-serif;font-size:13px;color:#5f6f7f">
+      <div>Designed, developed and maintained with ❤️ by ScottyLabs.</div>
+      <div style="margin-left:auto;display:flex;gap:18px;font-weight:500">
+        <a href="Current Events Page.dc.html" style="color:#0d89be">scottylabs.org</a>
+        <a href="#" style="color:#0d89be">GitHub</a>
+        <a href="Sign In.dc.html" style="color:#0d89be">Sign in</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1280}}">
+class Component extends DCLogic {
+  renderVals() {
+    const stack = [
+      { code: "invite.scottylabs.org", name: "Web app", desc: "React Router + Vite + TanStack Query — same setup as apps/web. Links back to scottylabs.org." },
+      { code: "api.invite.scottylabs.org", name: "API", desc: "Fastify + ts-rest + Drizzle — the contract-first stack already in apps/backend." },
+      { code: "postgres @ railway", name: "Database", desc: "One database, the tables below. Migrations via pnpm db:generate." },
+      { code: "mailgun", name: "Email", desc: "Sign-in links + codes, admin invites, approval and waitlist-promotion emails." },
+      { code: "pkpass · google wallet", name: "Passes", desc: "Signed .pkpass bundles and Google EventTicketObjects, serial = ticket serial." },
+      { code: "mcp.invite.scottylabs.org", name: "MCP server", desc: "Claude and other MCP clients query guest data — email-code auth, committee-scoped tokens." },
+    ];
+    const flows = [
+      { name: "Sign in — magic link", steps: [
+        "POST /auth/start with the email; check domain ∈ allowlist, or an admin invite, or a +1 token.",
+        "Insert a magic_links row (hashed token + 6-digit code, 10-minute expiry); Mailgun sends both.",
+        "On verify, upsert users by lowercased email — same email is always the same account.",
+        "Create a sessions row; set an httpOnly cookie, 30-day rolling. Sign out revokes it.",
+      ].map((text, i) => ({ n: i + 1, text })) },
+      { name: "Ticket — wallet passes", steps: [
+        "Approval (or instant RSVP) inserts tickets: serial SIT-042, per-event number, +1 allowance.",
+        "Apple: sign a .pkpass (pass.org.scottylabs.invite) with the QR barcode = serial; webServiceURL pushes updates.",
+        "Google: one EventTicketClass per event, an EventTicketObject per ticket, saved via a JWT link.",
+        "Door scan POSTs the serial; the API answers ok / duplicate / denied and writes checkins.",
+      ].map((text, i) => ({ n: i + 1, text })) },
+      { name: "Committees — who owns what", steps: [
+        "Super admin invites admins (any email, domain_exempt) and assigns a committee — or all-club ScottyLabs.",
+        "Creating an event stamps events.committee_id from the admin — or a picked one for super admins.",
+        "Admin portal toggles event_questions visibility; hidden fields never render on signup.",
+        "Dashboards and exports filter by committee_id; super admins see everything.",
+      ].map((text, i) => ({ n: i + 1, text })) },
+      { name: "MCP — query it from Claude", steps: [
+        "An admin adds mcp.invite.scottylabs.org as a connector; the server starts the same Mailgun code flow.",
+        "Verifying mints an mcp_tokens row tied to the admin — committee-scoped; super admins get scope all.",
+        "Tools like list_events, guest_list, pending_reviews, and export_csv read the same Postgres.",
+        "Every token is listed in the admin portal and revokes instantly.",
+      ].map((text, i) => ({ n: i + 1, text })) },
+    ];
+    const tables = [
+      { name: "committees", note: "8 committees + all-club", cols: ["id uuid pk", "slug text unique", "name text", "color text"] },
+      { name: "users", note: "one per email", cols: ["id uuid pk", "email citext unique", "name text", "andrew_id text null", "created_at timestamptz"] },
+      { name: "sessions", note: "cookie-backed", cols: ["id uuid pk", "user_id → users.id", "token_hash text", "expires_at · 30d rolling", "revoked_at null — sign out"] },
+      { name: "magic_links", note: "10 min ttl", cols: ["id uuid pk", "email citext", "token_hash · code_hash", "expires_at timestamptz", "used_at null"] },
+      { name: "admins", note: "super admin managed", cols: ["user_id → users.id", "committee_id → committees.id", "role admin | super_admin", "domain_exempt bool", "invited_by → users.id"] },
+      { name: "events", note: "committee-stamped", cols: ["id uuid pk", "committee_id → committees.id", "created_by → users.id", "slug unique · name · description", "starts_at · ends_at · location", "audience cmu | cmu_guests | public", "model instant | capacity | approval | invite", "capacity int null", "artwork · pass_style · stamp bool", "updates_email · digest hourly | daily | weekly", "contact_email — printed on the pass", "status draft | live | closed"] },
+      { name: "event_questions", note: "admin-controlled", cols: ["id uuid pk", "event_id → events.id", "kind standard | custom", "label · type text | select | file", "required bool · visible bool", "position int"] },
+      { name: "registrations", note: "unique per user", cols: ["id uuid pk", "event_id → events.id", "user_id → users.id", "status pending | approved | waitlisted | declined", "source text — how they heard", "unique (event_id, user_id)"] },
+      { name: "answers", note: "jsonb values", cols: ["registration_id → registrations.id", "question_id → event_questions.id", "value jsonb"] },
+      { name: "tickets", note: "the Scotty Invite", cols: ["id uuid pk", "registration_id → unique", "serial text — SIT-088", "number int per event", "plus_ones int", "apple_pass_serial · google_object_id", "state issued | void"] },
+      { name: "ticket_transfers", note: "+1 links", cols: ["id uuid pk", "ticket_id → tickets.id", "token text unique", "claimed_by → users.id null", "claimed_at timestamptz"] },
+      { name: "checkins", note: "door log", cols: ["id uuid pk", "ticket_id → tickets.id", "scanned_by → users.id", "door text", "result ok | duplicate | denied", "scanned_at timestamptz"] },
+      { name: "mcp_tokens", note: "admin data access", cols: ["id uuid pk", "user_id → users.id (admin)", "token_hash text", "scope committee | all", "last_used_at · revoked_at"] },
+    ];
+    return { stack, flows, tables };
+  }
+}
+</script>
+</body>
+</html>

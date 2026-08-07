@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Medium.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Bold.woff2') format('woff2');font-weight:700;font-display:swap}
+@font-face{font-family:'Satoshi';src:url('apps/web/app/assets/fonts/Satoshi-Black.woff2') format('woff2');font-weight:900;font-display:swap}
+@font-face{font-family:'JetBrainsMono';src:url('apps/web/app/assets/fonts/JetBrainsMono-Regular.ttf') format('truetype');font-weight:400;font-display:swap}
+html,body{margin:0;min-height:100%;font-family:Satoshi,system-ui,Avenir,Helvetica,Arial,sans-serif;font-weight:500;background:#fff;-webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+a{text-decoration:none;color:hsl(0,0%,0%)}a:hover{color:hsl(0,0%,0%)}
+.sl-social:hover img{filter:invert(1)}.sl-social:hover .sl-social-label{color:hsl(0,0%,93%) !important}.sl-social:active{filter:brightness(80%)}
+</style>
+</helmet>
+<div data-screen-label="Event page — Founder Party" style="min-width:0;display:flex;flex-direction:column;min-height:100vh">
+  <header style="position:sticky;top:0;background:#fff;border-bottom:1px solid #c7d2dc;z-index:999">
+    <div style="max-width:1200px;margin-inline:auto;padding:0 clamp(16px,4.5vw,40px);min-height:64px;display:flex;align-items:stretch;flex-wrap:wrap;column-gap:24px;box-sizing:border-box">
+      <a href="Events Home.dc.html" style="display:flex;gap:10px;align-items:center;padding:14px 0">
+        <img src="apps/web/app/assets/scottylabs-logo.svg" style="height:26px" alt="">
+        <div style="font-size:17px;font-weight:700;letter-spacing:-0.025em;color:#1e1e1e;white-space:nowrap">ScottyLabs Invites</div>
+      </a>
+      <nav style="display:flex;gap:18px;align-items:stretch;font-family:Inter,sans-serif">
+        <a href="Events Home.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:600;color:#0d89be;box-shadow:inset 0 -2px 0 #0e96d1">Browse</a>
+        <a href="Ticket.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f;box-shadow:none" style-hover="color:#1e1e1e">My tickets</a>
+        <a href="Organizer Dashboard.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f;box-shadow:none" style-hover="color:#1e1e1e">Organize</a>
+        <a href="Admin Portal.dc.html" style="display:flex;align-items:center;padding:0 2px;font-size:14px;font-weight:500;color:#5f6f7f;box-shadow:none" style-hover="color:#1e1e1e">Admin</a>
+      </nav>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:14px;font-family:Inter,sans-serif;padding:11px 0">
+        <a href="Current Events Page.dc.html" style="display:flex;align-items:center;gap:5px;font-size:12.5px;font-weight:500;color:#5f6f7f" style-hover="color:#1e1e1e">scottylabs.org<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7"></path><path d="M7 7h10v10"></path></svg></a>
+        <a href="Create Event.dc.html" style="display:flex;align-items:center;gap:6px;background:#1e1e1e;color:#fff;font-size:13px;font-weight:600;padding:8px 18px;border-radius:100px;transition:background-color 120ms cubic-bezier(0.2,0,0,1)" style-hover="background-color:#383838;color:#fff"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>Create event</a>
+        <a href="Sign In.dc.html" style="width:32px;height:32px;border-radius:100px;background:#e7f5fa;color:#0a6b94;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700" title="jtartan@andrew.cmu.edu — signed in via email link">JT</a>
+      </div>
+    </div>
+  </header>
+  <main style="flex-grow:1">
+    <section style="padding-inline:clamp(16px,4.5vw,40px);margin-inline:auto;max-width:1200px;box-sizing:border-box">
+      <a href="Events Home.dc.html" style="display:inline-flex;align-items:center;gap:6px;margin-top:28px;font-family:Inter,sans-serif;font-size:13px;font-weight:500;color:#5f6f7f" style-hover="color:#1e1e1e">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"></line><polyline points="12 19 5 12 12 5"></polyline></svg>
+        All events
+      </a>
+      <div style="display:flex;flex-wrap:wrap;gap:48px;margin-top:20px;padding-bottom:80px">
+        <div style="display:flex;flex-direction:column;gap:20px;flex:1 1 300px;max-width:400px;min-width:280px">
+          <div style="background:conic-gradient(from 180deg at 50% 50%, #d72444 0%, #8766d4 25%, #0e96d1 55%, #063f58 80%, #d72444 100%);border-radius:16px;padding:26px;display:flex;flex-direction:column;gap:70px;box-shadow:0 8px 24px rgba(30,30,30,0.12)">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <img src="apps/web/app/assets/scottylabs-logo.svg" style="height:34px;filter:brightness(0) invert(1)" alt="">
+              <span style="font-family:JetBrainsMono,monospace;font-size:12px;color:rgba(255,255,255,0.9)">Nº 001</span>
+            </div>
+            <div>
+              <div style="font-family:Inter,sans-serif;font-size:11px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:rgba(255,255,255,0.8)">Scotty invite</div>
+              <div style="font-size:24px;font-weight:700;color:#fff;letter-spacing:-0.02em;margin-top:4px;line-height:1.2">Foundry Founder Party</div>
+            </div>
+            <div style="border-top:2px dashed rgba(255,255,255,0.45);padding-top:16px;display:flex;justify-content:space-between;align-items:center">
+              <span style="font-family:JetBrainsMono,monospace;font-size:11px;color:rgba(255,255,255,0.85)">SEP 11 · 19:00 EDT</span>
+              <span style="font-family:JetBrainsMono,monospace;font-size:11px;color:rgba(255,255,255,0.85)">TEPPER 2713</span>
+            </div>
+          </div>
+          <div style="background:#fff;border:1px solid #c7d2dc;border-radius:12px;padding:18px 20px;display:flex;flex-direction:column;gap:14px;font-family:Inter,sans-serif">
+            <div style="font-size:12px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#5f6f7f">Hosted by</div>
+            <div style="display:flex;align-items:center;gap:12px">
+              <img src="assets/scotty-logo-color.png" style="width:36px;height:36px;border-radius:100px;object-fit:cover" alt="">
+              <div>
+                <div style="font-size:14px;font-weight:600;color:#1e1e1e">ScottyLabs Foundry</div>
+                <div style="font-size:12px;color:#5f6f7f">foundry@scottylabs.org</div>
+              </div>
+            </div>
+            <div style="border-top:1px solid #e9ebf8;padding-top:14px;display:flex;flex-direction:column;gap:10px">
+              <button onClick="{{ copyLink }}" style="all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:#0d89be" style-hover="color:#0a6b94">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                {{ copyLabel }}
+              </button>
+              <button style="all:unset;cursor:pointer;display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:#0d89be" style-hover="color:#0a6b94">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                Add to Google Calendar
+              </button>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-start;flex:1 1 460px;min-width:0">
+          <div style="display:flex;gap:8px;font-family:Inter,sans-serif">
+            <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#0a6b94;background:#e7f5fa;border:1px solid #b4def1;border-radius:4px;padding:3px 8px">Flagship</span>
+            <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#654a00;background:#fdf3e4;border:1px solid #f3e0b8;border-radius:4px;padding:3px 8px">Approval required</span>
+            <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#4a5662;background:#f0f4f8;border:1px solid #d9e1e7;border-radius:4px;padding:3px 8px">CMU + guests</span>
+            <span style="font-size:11px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#063f58;background:rgba(6,63,88,0.07);border:1px solid #aebdcc;border-radius:4px;padding:3px 8px">Foundry committee</span>
+          </div>
+          <h1 style="margin:14px 0 0;font-size:2.75rem;font-weight:700;letter-spacing:-0.02em;color:hsl(0,0%,0%);line-height:1.1">ScottyLabs Foundry Founder Party</h1>
+          <div style="margin-top:22px;display:flex;flex-direction:column;gap:12px;font-family:Inter,sans-serif;width:100%">
+            <div style="display:flex;align-items:center;gap:14px">
+              <div style="width:44px;height:44px;border:1px solid #c7d2dc;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden">
+                <div style="font-size:8px;font-weight:700;letter-spacing:0.08em;color:#d72444;text-transform:uppercase">Sep</div>
+                <div style="font-size:17px;font-weight:700;color:#1e1e1e;line-height:1">11</div>
+              </div>
+              <div>
+                <div style="font-size:15px;font-weight:600;color:#1e1e1e">Friday, September 11</div>
+                <div style="font-size:13px;color:#5f6f7f">7:00 – 10:00 PM EDT</div>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:14px">
+              <div style="width:44px;height:44px;border:1px solid #c7d2dc;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#4a5662">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+              </div>
+              <div>
+                <div style="font-size:15px;font-weight:600;color:#1e1e1e">Swartz Center for Entrepreneurship</div>
+                <div style="font-size:13px;color:#5f6f7f">Tepper 2713, Carnegie Mellon University</div>
+              </div>
+            </div>
+          </div>
+          <div style="margin-top:30px;font-family:Inter,sans-serif;max-width:640px">
+            <div style="font-size:13px;font-weight:600;letter-spacing:0.06em;text-transform:uppercase;color:#5f6f7f;border-bottom:1px solid #e9ebf8;padding-bottom:8px">About this event</div>
+            <p style="margin:14px 0 0;font-size:15px;line-height:1.6;color:#38424b;text-wrap:pretty">A night for CMU builders who ship. Meet the founders coming out of ScottyLabs Foundry, demo what you're working on, and find your next co-founder over good food. Dress code: whatever you build in.</p>
+            <p style="margin:12px 0 0;font-size:15px;line-height:1.6;color:#38424b;text-wrap:pretty">Approved guests get a Scotty Invite — a numbered, transferable pass with a +1 you can send to a friend. Scan it at the door.</p>
+          </div>
+          <div style="margin-top:34px;width:100%;max-width:640px;background:#f8fafc;border:1px solid #c7d2dc;border-radius:12px;overflow:hidden;font-family:Inter,sans-serif">
+            <div style="padding:18px 24px;border-bottom:1px solid #e9ebf8;display:flex;align-items:center;gap:12px">
+              <div style="font-family:Satoshi,sans-serif;font-size:18px;font-weight:700;color:#1e1e1e">Registration</div>
+              <div style="margin-left:auto;font-size:12px;color:#5f6f7f">87 of 120 spots approved</div>
+            </div>
+            <div style="height:4px;background:#d9e1e7"><div style="height:4px;width:72.5%;background:#0e96d1"></div></div>
+            <sc-if value="{{ showForm }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:24px;display:flex;flex-direction:column;gap:18px">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+                  <label style="display:flex;flex-direction:column;gap:6px">
+                    <span style="font-size:12px;font-weight:600;color:#4a5662">Full name</span>
+                    <input value="Jane Tartan" style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:10px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)">
+                  </label>
+                  <label style="display:flex;flex-direction:column;gap:6px">
+                    <span style="font-size:12px;font-weight:600;color:#4a5662;display:flex;align-items:center;gap:6px">Andrew ID
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#7a8fa3" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
+                    </span>
+                    <div style="display:flex;align-items:center;font-family:JetBrainsMono,monospace;font-size:13px;color:#5f6f7f;padding:10px 12px;border:1px solid #d9e1e7;border-radius:6px;background:#f0f4f8">jtartan <span style="margin-left:auto;font-family:Inter,sans-serif;font-size:11px;color:#7a8fa3">via andrew sign-in</span></div>
+                  </label>
+                  <label style="display:flex;flex-direction:column;gap:6px">
+                    <span style="font-size:12px;font-weight:600;color:#4a5662">Major</span>
+                    <select style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:10px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none;appearance:auto" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)">
+                      <option>Information Systems</option><option>Computer Science</option><option>ECE</option><option>Design</option><option>Business</option><option>Other</option>
+                    </select>
+                  </label>
+                  <label style="display:flex;flex-direction:column;gap:6px">
+                    <span style="font-size:12px;font-weight:600;color:#4a5662">Class year</span>
+                    <select style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:10px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none;appearance:auto" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)">
+                      <option>2027</option><option>2028</option><option>2029</option><option>2030</option><option>Grad</option>
+                    </select>
+                  </label>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <span style="font-size:12px;font-weight:600;color:#4a5662">Dietary restrictions</span>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px">
+                    <sc-for list="{{ dietChips }}" as="d" hint-placeholder-count="6">
+                      <button onClick="{{ d.onClick }}" style="{{ d.style }}">{{ d.label }}</button>
+                    </sc-for>
+                  </div>
+                </div>
+                <sc-if value="{{ collectResume }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;flex-direction:column;gap:8px">
+                    <span style="font-size:12px;font-weight:600;color:#4a5662">Resume <span style="font-weight:400;color:#7a8fa3">— optional, shared with Foundry mentors only</span></span>
+                    <sc-if value="{{ resumeEmpty }}" hint-placeholder-val="{{ true }}">
+                      <button onClick="{{ uploadResume }}" style="all:unset;cursor:pointer;box-sizing:border-box;width:100%;display:flex;align-items:center;justify-content:center;gap:10px;border:1.5px dashed #aebdcc;border-radius:8px;padding:18px;font-size:13px;color:#5f6f7f;background:#fff;transition:border-color 120ms" style-hover="border-color:#0e96d1;color:#0d89be">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                        Drop your resume here, or click to browse
+                      </button>
+                    </sc-if>
+                    <sc-if value="{{ resumeUploaded }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;align-items:center;gap:10px;border:1px solid #cde8d4;background:#e9f5ec;border-radius:8px;padding:12px 14px;font-size:13px;color:#0d4b17">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#3a9a4c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        jane-tartan-resume.pdf
+                        <button onClick="{{ removeResume }}" style="all:unset;cursor:pointer;margin-left:auto;color:#5f6f7f;font-size:12px;font-weight:500" style-hover="color:#d72444">Remove</button>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+                <label style="display:flex;flex-direction:column;gap:6px">
+                  <span style="font-size:12px;font-weight:600;color:#4a5662">What are you building right now? <span style="font-weight:400;color:#7a8fa3">— host question</span></span>
+                  <textarea rows="2" placeholder="A sentence or two is plenty" style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:10px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none;resize:vertical" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)"></textarea>
+                </label>
+                <label style="display:flex;flex-direction:column;gap:6px;max-width:280px">
+                  <span style="font-size:12px;font-weight:600;color:#4a5662">How did you hear about this?</span>
+                  <select style="font-family:Inter,sans-serif;font-size:14px;color:#1e1e1e;padding:10px 12px;border:1px solid #c7d2dc;border-radius:6px;background:#fff;outline:none;appearance:auto" style-focus="border-color:#0e96d1;box-shadow:0 0 0 3px rgba(14,150,209,0.25)">
+                    <option>Slack</option><option>Instagram</option><option>A friend's +1 invite</option><option>Poster on campus</option><option>GBM</option><option>Other</option>
+                  </select>
+                </label>
+                <button onClick="{{ togglePlusOne }}" style="all:unset;cursor:pointer;display:flex;align-items:center;gap:12px;border:1px solid #c7d2dc;border-radius:8px;padding:14px 16px;background:#fff">
+                  <div style="{{ switchTrack }}"><div style="{{ switchKnob }}"></div></div>
+                  <div>
+                    <div style="font-size:13px;font-weight:600;color:#1e1e1e">Bring a +1</div>
+                    <div style="font-size:12px;color:#5f6f7f">You'll get a transferable invite link to send a friend once you're approved.</div>
+                  </div>
+                </button>
+                <div style="display:flex;align-items:center;gap:14px;margin-top:4px">
+                  <button onClick="{{ submit }}" style="all:unset;cursor:pointer;background:#0e96d1;color:#fff;font-family:Inter,sans-serif;font-weight:600;font-size:15px;padding:12px 30px;border-radius:100px;transition:background-color 120ms cubic-bezier(0.2,0,0,1),transform 120ms" style-hover="background-color:#0d89be" style-active="background-color:#0a6b94;transform:scale(0.97)">Request an invite</button>
+                  <span style="font-size:12px;color:#7a8fa3;max-width:300px">Your name, andrew ID, and answers go to ScottyLabs organizers — nowhere else.</span>
+                </div>
+              </div>
+            </sc-if>
+            <sc-if value="{{ showPending }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:32px 24px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center">
+                <div style="width:44px;height:44px;border-radius:100px;background:#e7f5fa;display:flex;align-items:center;justify-content:center">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0e96d1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </div>
+                <div style="font-family:Satoshi,sans-serif;font-size:20px;font-weight:700;color:#1e1e1e">Request sent</div>
+                <p style="margin:0;font-size:14px;line-height:1.5;color:#4a5662;max-width:380px">The Foundry team reviews requests daily. Once you're approved, your Scotty Invite lands in your email and under My tickets.</p>
+                <a href="Ticket.dc.html" style="margin-top:6px;font-family:Inter,sans-serif;font-size:13px;font-weight:600;color:#1e1e1e;border:1px solid #9eb1c2;padding:9px 20px;border-radius:100px;background:#fff" style-hover="border-color:#1e1e1e">View my tickets</a>
+              </div>
+            </sc-if>
+            <sc-if value="{{ showApproved }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:32px 24px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center">
+                <div style="width:44px;height:44px;border-radius:100px;background:#e9f5ec;display:flex;align-items:center;justify-content:center">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#3a9a4c" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </div>
+                <div style="font-family:Satoshi,sans-serif;font-size:20px;font-weight:700;color:#1e1e1e">You're in</div>
+                <p style="margin:0;font-size:14px;line-height:1.5;color:#4a5662;max-width:380px">Scotty Invite Nº 088 is yours. Show the QR at the door — and your +1 link is ready to send.</p>
+                <a href="Ticket.dc.html" style="margin-top:6px;font-family:Inter,sans-serif;font-size:14px;font-weight:600;color:#fff;background:#0e96d1;padding:11px 26px;border-radius:100px;transition:background-color 120ms" style-hover="background-color:#0d89be;color:#fff">View my Scotty Invite</a>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <footer style="border-top:1px solid #c7d2dc;background:#fff">
+    <div style="max-width:1200px;margin-inline:auto;padding:14px clamp(16px,4.5vw,40px);display:flex;align-items:center;gap:10px 24px;flex-wrap:wrap;box-sizing:border-box;font-family:Inter,sans-serif;font-size:13px;color:#5f6f7f">
+      <div>Designed, developed and maintained with ❤️ by ScottyLabs.</div>
+      <div style="margin-left:auto;display:flex;gap:18px;font-weight:500">
+        <a href="Current Events Page.dc.html" style="color:#0d89be">scottylabs.org</a>
+        <a href="Architecture.dc.html" style="color:#0d89be">Architecture</a>
+        <a href="#" style="color:#0d89be">GitHub</a>
+        <a href="Sign In.dc.html" style="color:#0d89be">Sign in</a>
+      </div>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;: {&quot;width&quot;: 1280}, &quot;registrationState&quot;: {&quot;editor&quot;: &quot;enum&quot;, &quot;default&quot;: &quot;open&quot;, &quot;options&quot;: [&quot;open&quot;, &quot;pending&quot;, &quot;approved&quot;], &quot;tsType&quot;: &quot;string&quot;, &quot;section&quot;: &quot;Registration&quot;}, &quot;collectResume&quot;: {&quot;editor&quot;: &quot;boolean&quot;, &quot;default&quot;: true, &quot;tsType&quot;: &quot;boolean&quot;, &quot;section&quot;: &quot;Registration&quot;}}">
+class Component extends DCLogic {
+  state = { diets: [], resume: false, plusOne: true, submitted: false, copied: false };
+  renderVals() {
+    const rs = this.state.submitted ? "pending" : (this.props.registrationState ?? "open");
+    const diets = ["Vegetarian", "Vegan", "Halal", "Kosher", "Gluten-free", "Nut allergy"];
+    const dietChips = diets.map((d) => {
+      const on = this.state.diets.includes(d);
+      return {
+        label: d,
+        onClick: () => this.setState((s) => ({ diets: on ? s.diets.filter((x) => x !== d) : [...s.diets, d] })),
+        style: on
+          ? "all:unset;cursor:pointer;font-family:Inter,sans-serif;font-size:12px;font-weight:600;padding:6px 14px;border-radius:100px;background:#e7f5fa;color:#0a6b94;border:1px solid #0e96d1"
+          : "all:unset;cursor:pointer;font-family:Inter,sans-serif;font-size:12px;font-weight:500;padding:6px 14px;border-radius:100px;background:#fff;color:#4a5662;border:1px solid #c7d2dc",
+      };
+    });
+    const on = this.state.plusOne;
+    return {
+      showForm: rs === "open",
+      showPending: rs === "pending",
+      showApproved: rs === "approved",
+      collectResume: this.props.collectResume ?? true,
+      dietChips,
+      resumeEmpty: !this.state.resume,
+      resumeUploaded: this.state.resume,
+      uploadResume: () => this.setState({ resume: true }),
+      removeResume: () => this.setState({ resume: false }),
+      togglePlusOne: () => this.setState((s) => ({ plusOne: !s.plusOne })),
+      switchTrack: `flex:none;width:36px;height:20px;border-radius:100px;background:${on ? "#0e96d1" : "#aebdcc"};position:relative;transition:background-color 180ms cubic-bezier(0.2,0,0,1)`,
+      switchKnob: `position:absolute;top:2px;left:${on ? "18px" : "2px"};width:16px;height:16px;border-radius:100px;background:#fff;transition:left 180ms cubic-bezier(0.2,0,0,1);box-shadow:0 1px 2px rgba(30,30,30,0.2)`,
+      submit: () => this.setState({ submitted: true }),
+      copyLink: () => { this.setState({ copied: true }); setTimeout(() => this.setState({ copied: false }), 1600); },
+      copyLabel: this.state.copied ? "Copied!" : "Copy event link",
+    };
+  }
+}
+</script>
+</body>
+</html>

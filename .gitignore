@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+node_modules/
+dist/
+.DS_Store
+*.log
+.railway/
+"ScottyLabs event signup system.zip"
+*.zip
