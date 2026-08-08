@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { db, schema } from "./db/client";
 import { env } from "./env";
-import { router, contract, setSessionCookie, deriveLocationShort } from "./routes/router";
+import { router, contract, setSessionCookie, deriveLocationShort, inviteCodeMatches } from "./routes/router";
 import { resolveSession, verifyByToken, type AuthContext } from "./auth/service";
 import { buildIcs, googleCalendarUrl } from "./lib/ics";
 import { registerOauthRoutes } from "./oauth/routes";
@@ -295,6 +295,11 @@ export async function buildServer(): Promise<FastifyInstance> {
     const rows = await db.select().from(schema.events).where(eq(schema.events.shortCode, code));
     const e = rows[0];
     if (!e || e.status !== "published") return reply.status(404).send({ error: "not_found", message: "Event not found" });
+    // Unlisted (invite-only) events don't leak details without the code.
+    const supplied = (request.query as { code?: string }).code;
+    if (!e.listed && !inviteCodeMatches(e, supplied) && !request.authCtx?.admin) {
+      return reply.status(404).send({ error: "not_found", message: "Event not found" });
+    }
     const ics = buildIcs(
       [
         {
@@ -318,7 +323,11 @@ export async function buildServer(): Promise<FastifyInstance> {
     const { code } = request.params as { code: string };
     const rows = await db.select().from(schema.events).where(eq(schema.events.shortCode, code));
     const e = rows[0];
-    if (!e) return reply.status(404).send({ error: "not_found", message: "Event not found" });
+    if (!e || e.status !== "published") return reply.status(404).send({ error: "not_found", message: "Event not found" });
+    const supplied = (request.query as { code?: string }).code;
+    if (!e.listed && !inviteCodeMatches(e, supplied) && !request.authCtx?.admin) {
+      return reply.status(404).send({ error: "not_found", message: "Event not found" });
+    }
     return reply.redirect(
       googleCalendarUrl({
         uid: e.shortCode,

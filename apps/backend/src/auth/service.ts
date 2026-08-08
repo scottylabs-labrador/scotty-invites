@@ -77,9 +77,17 @@ export async function startAuth(opts: {
   const email = opts.email.trim().toLowerCase();
   const domain = email.split("@")[1] ?? "";
 
+  // An existing account is itself proof of a legitimate path in (CMU email,
+  // admin invite, or a +1 claim) — "same email, same account, every time".
+  // Without this, a non-CMU +1 guest is locked out of their own ticket the
+  // moment their transfer flips to claimed.
+  const existingUser = async () =>
+    (await db.select({ id: schema.users.id }).from(schema.users).where(eq(schema.users.email, email))).length > 0;
+
   const allowed =
     isCmuEmail(email) ||
     (await findAdminByEmail(email)) !== null ||
+    (await existingUser()) ||
     (opts.transferToken ? await transferTokenValid(opts.transferToken) : false);
 
   if (!allowed) {

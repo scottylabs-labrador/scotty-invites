@@ -507,11 +507,11 @@ export default function CreateEventPage() {
                     Event is live
                   </div>
                   <div className="mono" style={{ fontSize: 12, color: "#38424b", background: "#fff", border: "1px solid var(--success-border)", borderRadius: 6, padding: "8px 12px", marginTop: 10, overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {published.url.replace(/^https?:\/\//, "")}
+                    {`${published.url}${published.inviteCode ? `?code=${published.inviteCode}` : ""}`.replace(/^https?:\/\//, "")}
                   </div>
                   {published.inviteCode && (
                     <div style={{ fontSize: 12, color: "var(--muted-1)", marginTop: 8 }}>
-                      Invite code: <span className="mono">{published.inviteCode}</span> — share it with the link.
+                      The link includes the invite code <span className="mono">{published.inviteCode}</span> — guests with it skip the code prompt.
                     </div>
                   )}
                   <div style={{ display: "flex", gap: 14, marginTop: 12, fontSize: 12.5, fontWeight: 600 }}>

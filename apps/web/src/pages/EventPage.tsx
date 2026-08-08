@@ -86,6 +86,8 @@ export default function EventPage() {
 }
 
 function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: string }) {
+  const codeSuffix = inviteCode ? `?code=${encodeURIComponent(inviteCode)}` : "";
+  const eventPath = `/e/${detail.shortCode}${codeSuffix}`;
   const { me } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -153,7 +155,7 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
   }
 
   function copyEventLink() {
-    void navigator.clipboard.writeText(`${window.location.origin}/e/${detail.shortCode}`);
+    void navigator.clipboard.writeText(`${window.location.origin}${eventPath}`);
     setCopied(true);
     setTimeout(() => setCopied(false), 1600);
   }
@@ -224,7 +226,7 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
               <LinkIcon size={14} />
               {copied ? "Copied!" : "Copy event link"}
             </button>
-            <a className="icon-link" href={`/api/events/${detail.shortCode}/google-calendar`} target="_blank" rel="noreferrer">
+            <a className="icon-link" href={`/api/events/${detail.shortCode}/google-calendar${codeSuffix}`} target="_blank" rel="noreferrer">
               <CalendarIcon size={14} />
               Add to Google Calendar
             </a>
@@ -295,7 +297,7 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--muted-1)", maxWidth: 380 }}>
                 Sign in with your CMU email to {detail.model === "approval" ? "request an invite" : "sign up"} — it takes two clicks.
               </p>
-              <button className="pill pill-blue" style={{ fontSize: 14, padding: "11px 26px" }} onClick={() => navigate(`/signin?to=/e/${detail.shortCode}`)}>
+              <button className="pill pill-blue" style={{ fontSize: 14, padding: "11px 26px" }} onClick={() => navigate(`/signin?to=${encodeURIComponent(eventPath)}`)}>
                 Sign in to continue
               </button>
             </div>

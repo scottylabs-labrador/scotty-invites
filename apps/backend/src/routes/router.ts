@@ -15,7 +15,7 @@ import {
 } from "@scottylabs-invites/contract";
 import { db, schema } from "../db/client";
 import { env, isCmuEmail } from "../env";
-import { initialsOf } from "../lib/crypto";
+import { initialsOf, safeEqual } from "../lib/crypto";
 import { fmtStubDate } from "../lib/format";
 import { sendMail } from "../lib/mail";
 import { adminInviteEmail, plusOneInviteEmail } from "../lib/emails";
@@ -75,6 +75,38 @@ export function deriveLocationShort(location: string, explicit?: string | null):
 
 const unauthorized = { status: 401 as const, body: { error: "unauthorized", message: "Sign in to do that." } };
 const forbidden = { status: 403 as const, body: { error: "forbidden", message: "You don't have access to that." } };
+
+// --- invite-code gate ---------------------------------------------------
+// Normalized (trim/lowercase), constant-time, fail-closed when the event has
+// no code, and wrong guesses are rate limited per IP+event.
+
+/** True when the supplied code unlocks the event. */
+export function inviteCodeMatches(event: { inviteCode: string | null }, supplied: string | undefined | null): boolean {
+  if (!event.inviteCode) return false; // fail closed — a code-less invite event admits nobody by code
+  const a = (supplied ?? "").trim().toLowerCase();
+  if (!a) return false;
+  return safeEqual(a, event.inviteCode.trim().toLowerCase());
+}
+
+const inviteFails = new Map<string, { count: number; resetAt: number }>();
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of inviteFails) if (v.resetAt < now) inviteFails.delete(k);
+}, 60_000).unref();
+
+/** Sliding gate: 20 wrong codes per IP+event per 10 minutes. */
+export function inviteAttemptsExceeded(ip: string, eventId: string): boolean {
+  const b = inviteFails.get(`${ip}:${eventId}`);
+  return !!b && b.resetAt > Date.now() && b.count >= 20;
+}
+
+export function recordInviteFail(ip: string, eventId: string): void {
+  const key = `${ip}:${eventId}`;
+  const now = Date.now();
+  const b = inviteFails.get(key);
+  if (!b || b.resetAt < now) inviteFails.set(key, { count: 1, resetAt: now + 10 * 60 * 1000 });
+  else b.count += 1;
+}
 
 /** Admin scope filter: super admins see everything; committee admins see their committee. */
 function scopedCommitteeIds(ctx: AuthContext): string[] | "all" {
@@ -287,8 +319,14 @@ export const router = s.router(contract, {
       if (e.model === "invite" && !myRegistration) {
         const isScopedAdmin =
           ctx?.admin && (ctx.admin.row.role === "super_admin" || ctx.admin.row.committeeId === e.committeeId);
-        if (!isScopedAdmin && (query.inviteCode ?? "") !== (e.inviteCode ?? "")) {
-          return { status: 401, body: { error: "invite_code_required", message: "This event is invite only — enter your invite code." } };
+        if (!isScopedAdmin) {
+          if (inviteAttemptsExceeded(request.ip, e.id)) {
+            return { status: 401, body: { error: "invite_code_required", message: "Too many code attempts — wait a few minutes and try again." } };
+          }
+          if (!inviteCodeMatches(e, query.inviteCode)) {
+            if (query.inviteCode) recordInviteFail(request.ip, e.id);
+            return { status: 401, body: { error: "invite_code_required", message: "This event is invite only — enter your invite code." } };
+          }
         }
       }
 
@@ -347,8 +385,18 @@ export const router = s.router(contract, {
       const event = rows[0];
       if (!event || event.status !== "published") return { status: 404, body: { error: "not_found", message: "Event not found" } };
       if (event.endAt < new Date()) return { status: 400, body: { error: "ended", message: "This event already ended." } };
-      if (event.model === "invite" && (body.inviteCode ?? "") !== (event.inviteCode ?? "")) {
-        return { status: 400, body: { error: "invite_code", message: "That invite code isn't right." } };
+      if (event.model === "invite") {
+        const isScopedAdmin =
+          ctx.admin && (ctx.admin.row.role === "super_admin" || ctx.admin.row.committeeId === event.committeeId);
+        if (!isScopedAdmin) {
+          if (inviteAttemptsExceeded(request.ip, event.id)) {
+            return { status: 400, body: { error: "invite_code", message: "Too many code attempts — wait a few minutes and try again." } };
+          }
+          if (!inviteCodeMatches(event, body.inviteCode)) {
+            recordInviteFail(request.ip, event.id);
+            return { status: 400, body: { error: "invite_code", message: "That invite code isn't right." } };
+          }
+        }
       }
       if (event.audience === "cmu" && !isCmuEmail(ctx.user.email) && !ctx.admin) {
         return { status: 400, body: { error: "audience", message: "This event is CMU only." } };
@@ -863,6 +911,9 @@ export const router = s.router(contract, {
       if (body.model !== undefined) patch.listed = body.model !== "invite";
 
       if (Object.keys(patch).length === 0) return { status: 400, body: { error: "empty", message: "Nothing to update." } };
+      if (body.model === "invite" && !scoped.event.inviteCode) {
+        patch.inviteCode = newToken(6).replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toLowerCase();
+      }
       await db.update(schema.events).set(patch).where(eq(schema.events.id, params.id));
       if (patch.capacity !== undefined || patch.model !== undefined) await promoteWaitlist(params.id);
       return { status: 200, body: { ok: true } };
