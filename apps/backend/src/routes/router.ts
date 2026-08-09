@@ -29,6 +29,7 @@ import {
   checkinBySerial,
   approvedCount,
   promoteWaitlist,
+  waitlistToPending,
 } from "../services/registrations";
 import { ensureTransfer, revokeTransfer, parseTransferToken, transferUrl } from "../services/transfers";
 import { getQuestionControls, setQuestionControl } from "../services/settings";
@@ -135,7 +136,14 @@ function scopedCommitteeIds(ctx: AuthContext): string[] | "all" {
   return [ctx.admin.row.committeeId];
 }
 
+/** Path ids arrive as raw strings; a non-uuid reaches Postgres as a cast error
+ *  and surfaces as a 500. Callers treat this as "not found". */
+export function isUuid(value: string): boolean {
+  return /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(value);
+}
+
 async function loadScopedEvent(ctx: AuthContext, eventId: string) {
+  if (!isUuid(eventId)) return null;
   const rows = await db
     .select({ event: schema.events, committee: schema.committees })
     .from(schema.events)
@@ -365,6 +373,7 @@ export const router = s.router(contract, {
         shortCode: e.shortCode,
         title: e.title,
         description: e.description,
+        status: e.status === "cancelled" ? "cancelled" : "published",
         // Organizers only, so their "Copy invite link" works from the public
         // page. Guests share the URL they arrived on.
         inviteCode: isScopedAdminFor(ctx, e.committeeId) ? e.inviteCode : null,
@@ -709,7 +718,9 @@ export const router = s.router(contract, {
         .select({ event: schema.events, committee: schema.committees })
         .from(schema.events)
         .innerJoin(schema.committees, eq(schema.events.committeeId, schema.committees.id))
-        .where(scope === "all" ? ne(schema.events.status, "cancelled") : and(ne(schema.events.status, "cancelled"), inArray(schema.events.committeeId, scope)))
+        // Cancelled events stay listed here: the organizer still needs to reach
+        // them to un-cancel, export the guest list, or delete them for good.
+        .where(scope === "all" ? undefined : inArray(schema.events.committeeId, scope))
         .orderBy(desc(schema.events.startAt));
 
       const ids = rows.map((r) => r.event.id);
@@ -742,6 +753,7 @@ export const router = s.router(contract, {
             approvedCount: byEvent.get(e.id)?.approved ?? 0,
             capacity: e.capacity,
             model: e.model,
+            status: e.status,
           })),
         },
       };
@@ -838,6 +850,79 @@ export const router = s.router(contract, {
       return { status: 200, body };
     },
 
+    getEvent: async ({ params, request }) => {
+      const ctx = ctxOf(request);
+      if (!ctx) return unauthorized;
+      if (!ctx.admin) return forbidden;
+      const scoped = await loadScopedEvent(ctx, params.id);
+      if (scoped === null) return { status: 404, body: { error: "not_found", message: "Event not found" } };
+      if (scoped === "forbidden") return forbidden;
+      const { event: e, committee: c } = scoped;
+
+      const questions = await db
+        .select()
+        .from(schema.eventQuestions)
+        .where(eq(schema.eventQuestions.eventId, e.id))
+        .orderBy(asc(schema.eventQuestions.sort));
+
+      const statusCounts = await db
+        .select({ status: schema.registrations.status, count: sql<number>`count(*)::int` })
+        .from(schema.registrations)
+        .where(eq(schema.registrations.eventId, e.id))
+        .groupBy(schema.registrations.status);
+      const registrationCount = statusCounts.reduce((n, r) => n + r.count, 0);
+      const waitlistCount = statusCounts.find((r) => r.status === "waitlisted")?.count ?? 0;
+
+      const shareUrl =
+        e.model === "invite" && e.inviteCode
+          ? `${env.appUrl}/e/${e.shortCode}?code=${encodeURIComponent(e.inviteCode)}`
+          : `${env.appUrl}/e/${e.shortCode}`;
+
+      return {
+        status: 200,
+        body: {
+          id: e.id,
+          shortCode: e.shortCode,
+          number: e.number,
+          title: e.title,
+          description: e.description,
+          category: e.category as EventDetail["category"],
+          audience: e.audience,
+          model: e.model,
+          capacity: e.capacity,
+          startAt: e.startAt.toISOString(),
+          endAt: e.endAt.toISOString(),
+          location: e.location,
+          locationShort: e.locationShort,
+          artwork: e.artwork as EventDetail["artwork"],
+          passStyle: e.passStyle,
+          stampCommittee: e.stampCommittee,
+          allowPlusOne: e.allowPlusOne,
+          flagship: e.flagship,
+          updatesEmail: e.updatesEmail,
+          contactEmail: e.contactEmail,
+          digest: e.digest,
+          status: e.status,
+          listed: e.listed,
+          inviteCode: e.inviteCode,
+          shareUrl,
+          committee: committeeDto(c),
+          questions: questions.map((q) => ({
+            id: q.id,
+            kind: q.kind,
+            key: (q.key as EventDetail["questions"][number]["key"]) ?? null,
+            label: q.label,
+            type: q.type,
+            options: q.options ?? null,
+            required: q.required,
+          })),
+          registrationCount,
+          waitlistCount,
+          deletable: registrationCount === 0,
+        },
+      };
+    },
+
     approve: async ({ params, request }) => {
       const ctx = ctxOf(request);
       if (!ctx) return unauthorized;
@@ -872,15 +957,34 @@ export const router = s.router(contract, {
       if (scoped === null) return { status: 404, body: { error: "not_found", message: "Event not found" } };
       if (scoped === "forbidden") return forbidden;
 
+      // Deleting destroys registrations, tickets people are holding, and the
+      // check-in record. An event with signups is never a one-click delete:
+      // cancel it first (which keeps the data and hides it from browse), and
+      // only then can a super admin remove it for good.
       const regCount = await db
         .select({ count: sql<number>`count(*)::int` })
         .from(schema.registrations)
         .where(eq(schema.registrations.eventId, params.id));
-      if ((regCount[0]?.count ?? 0) > 0 && ctx.admin.row.role !== "super_admin") {
-        return {
-          status: 400,
-          body: { error: "has_signups", message: "This event already has signups — only a super admin can delete it." },
-        };
+      const signups = regCount[0]?.count ?? 0;
+      if (signups > 0) {
+        if (ctx.admin.row.role !== "super_admin") {
+          return {
+            status: 400,
+            body: {
+              error: "has_signups",
+              message: `This event has ${signups} signup${signups === 1 ? "" : "s"} — cancel it instead, or ask a super admin to delete it.`,
+            },
+          };
+        }
+        if (scoped.event.status !== "cancelled") {
+          return {
+            status: 400,
+            body: {
+              error: "cancel_first",
+              message: `This event has ${signups} signup${signups === 1 ? "" : "s"}. Cancel it first — then it can be deleted permanently.`,
+            },
+          };
+        }
       }
 
       await db.transaction(async (tx) => {
@@ -916,8 +1020,25 @@ export const router = s.router(contract, {
       if (body.audience !== undefined) patch.audience = body.audience;
       if (body.model !== undefined) patch.model = body.model;
       if (body.capacity !== undefined) patch.capacity = body.capacity;
-      if (body.startAt !== undefined) patch.startAt = new Date(body.startAt);
-      if (body.endAt !== undefined) patch.endAt = new Date(body.endAt);
+      // Dates: reject unparseable input, and check start/end against whatever
+      // the event will actually hold after the patch — a one-sided edit still
+      // has to land on a valid range. createEvent enforces the same rule.
+      if (body.startAt !== undefined) {
+        const startAt = new Date(body.startAt);
+        if (Number.isNaN(startAt.getTime())) return { status: 400, body: { error: "dates", message: "That start time isn't a valid date." } };
+        patch.startAt = startAt;
+      }
+      if (body.endAt !== undefined) {
+        const endAt = new Date(body.endAt);
+        if (Number.isNaN(endAt.getTime())) return { status: 400, body: { error: "dates", message: "That end time isn't a valid date." } };
+        patch.endAt = endAt;
+      }
+      const effectiveStart = patch.startAt ?? scoped.event.startAt;
+      const effectiveEnd = patch.endAt ?? scoped.event.endAt;
+      if (effectiveEnd <= effectiveStart) {
+        return { status: 400, body: { error: "dates", message: "The end time has to come after the start." } };
+      }
+
       if (body.location !== undefined) patch.location = body.location;
       if (body.locationShort !== undefined) patch.locationShort = body.locationShort;
       if (body.artwork !== undefined) patch.artwork = body.artwork;
@@ -929,14 +1050,36 @@ export const router = s.router(contract, {
       if (body.contactEmail !== undefined) patch.contactEmail = body.contactEmail;
       if (body.digest !== undefined) patch.digest = body.digest;
       if (body.status !== undefined) patch.status = body.status;
-      if (body.model !== undefined) patch.listed = body.model !== "invite";
+
+      // Switching the signup model carries its own side effects, or the event
+      // lands in a state createEvent would never produce. Becoming invite-only
+      // without a code leaves the gate open; leaving invite-only while still
+      // unlisted hides the event from browse forever.
+      if (body.model !== undefined) {
+        patch.listed = body.model !== "invite";
+        if (body.model === "invite") {
+          if (!scoped.event.inviteCode?.trim()) patch.inviteCode = newInviteCode();
+        } else if (scoped.event.model === "invite") {
+          patch.inviteCode = null;
+        }
+      }
+
+      // Instant events never hold a cap — mirror createEvent so a caller sending
+      // only {model:"instant"} can't leave a live capacity behind.
+      if (patch.model === "instant") patch.capacity = null;
 
       if (Object.keys(patch).length === 0) return { status: 400, body: { error: "empty", message: "Nothing to update." } };
-      if (body.model === "invite" && !scoped.event.inviteCode) {
-        patch.inviteCode = newInviteCode();
-      }
       await db.update(schema.events).set(patch).where(eq(schema.events.id, params.id));
-      if (patch.capacity !== undefined || patch.model !== undefined) await promoteWaitlist(params.id);
+
+      // Anyone still waitlisted has to land somewhere the new model can drain:
+      // approval sends them back to the review queue, everything else promotes
+      // them as far as the (possibly now absent) capacity allows. Without this,
+      // dropping the cap strands them in a queue that can never move again.
+      if (patch.capacity !== undefined || patch.model !== undefined) {
+        const nextModel = patch.model ?? scoped.event.model;
+        if (nextModel === "approval") await waitlistToPending(params.id);
+        else await promoteWaitlist(params.id);
+      }
       return { status: 200, body: { ok: true } };
     },
 

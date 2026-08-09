@@ -5,7 +5,7 @@ import type { Dashboard } from "@scottylabs-invites/contract";
 import { api, unwrap } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { Page, Spinner } from "../components/AppShell";
-import { CheckIcon, DownloadIcon, FileTextIcon, SearchIcon } from "../components/icons";
+import { CheckIcon, DownloadIcon, FileTextIcon, LinkIcon, SearchIcon } from "../components/icons";
 import { fmtShortDate } from "../lib/format";
 
 const AVATAR_PALETTES = ["#e7f5fa,#0a6b94", "#f3e8fd,#4b2d8f", "#fbe9ed,#991a30", "#e9f5ec,#0d4b17", "#fdf3e4,#654a00"];
@@ -47,7 +47,12 @@ export default function OrganizePage() {
   });
 
   const events = eventsQuery.data?.events ?? [];
-  const activeId = id ?? events[0]?.id;
+  // A stale or foreign id in the URL (deleted event, wrong committee, pasted
+  // link) must not silently show someone else's first event — send them back
+  // to their own default instead of rendering a dashboard they didn't ask for.
+  const known = id ? events.some((e) => e.id === id) : false;
+  const activeId = known ? id : events[0]?.id;
+  const wrongId = !!id && events.length > 0 && !known;
 
   if (!loading && !me.admin) {
     return (
@@ -78,6 +83,12 @@ export default function OrganizePage() {
             </Link>
           </div>
         )}
+        {wrongId && (
+          <div className="fade-in" style={{ marginTop: 28, fontFamily: "var(--font-ui)", fontSize: 13, color: "#654a00", background: "#fdf3e4", border: "1px solid #f0dcb4", borderRadius: 8, padding: "10px 14px" }}>
+            That event isn't on your dashboard — it may have been deleted, or belong to another committee. Showing your most recent event
+            instead.
+          </div>
+        )}
         {activeId && events.length > 0 && (
           <DashboardBody key={activeId} eventId={activeId} events={events} onSwitch={(next) => navigate(`/organize/${next}`)} />
         )}
@@ -92,12 +103,14 @@ function DashboardBody({
   onSwitch,
 }: {
   eventId: string;
-  events: { id: string; title: string }[];
+  events: { id: string; title: string; status: string }[];
   onSwitch: (id: string) => void;
 }) {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [shown, setShown] = useState(25);
+  const [copied, setCopied] = useState(false);
+  const cancelled = events.find((e) => e.id === eventId)?.status === "cancelled";
 
   const query = useQuery({
     queryKey: ["dashboard", eventId],
@@ -167,6 +180,11 @@ function DashboardBody({
         <div>
           <div style={{ position: "relative", display: "inline-flex", alignItems: "center", gap: 8 }}>
             <h1 style={{ margin: 0, fontSize: "1.75rem", fontWeight: 700, letterSpacing: "-0.02em", color: "#000" }}>{d.event.title}</h1>
+            {cancelled && (
+              <span style={{ fontFamily: "var(--font-ui)", fontSize: 11.5, fontWeight: 600, color: "#5a0f1d", background: "#fbe9ed", borderRadius: 100, padding: "4px 12px" }}>
+                Cancelled
+              </span>
+            )}
             {events.length > 1 && (
               <>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5f6f7f" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -196,12 +214,27 @@ function DashboardBody({
             {d.event.inviteCode && (
               <>
                 {" "}
-                · invite code <span className="mono" style={{ fontSize: 12 }}>{d.event.inviteCode}</span>
+                · invite code <span className="mono" style={{ fontSize: 12 }}>{d.event.inviteCode}</span>{" "}
+                <button
+                  className="icon-link"
+                  style={{ display: "inline-flex", fontSize: 12.5 }}
+                  onClick={() => {
+                    void navigator.clipboard.writeText(`${window.location.origin}/e/${d.event.shortCode}?code=${encodeURIComponent(d.event.inviteCode!)}`);
+                    setCopied(true);
+                    setTimeout(() => setCopied(false), 1600);
+                  }}
+                >
+                  <LinkIcon size={12} />
+                  {copied ? "Copied!" : "Copy invite link"}
+                </button>
               </>
             )}
           </div>
         </div>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 10, fontFamily: "var(--font-ui)" }}>
+        <div style={{ marginLeft: "auto", display: "flex", gap: 10, fontFamily: "var(--font-ui)", flexWrap: "wrap" }}>
+          <Link to={`/organize/${d.event.id}/edit`} className="pill pill-outline" style={{ fontSize: 13, padding: "9px 20px" }}>
+            Edit event
+          </Link>
           <a href={`/api/org/events/${d.event.id}/export.csv`} className="pill pill-outline" style={{ fontSize: 13, padding: "9px 20px" }}>
             <DownloadIcon size={14} />
             Export CSV

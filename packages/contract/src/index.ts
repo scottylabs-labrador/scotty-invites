@@ -141,6 +141,9 @@ export const EventDetail = z.object({
   shortCode: z.string(),
   title: z.string(),
   description: z.string(),
+  /** "cancelled" events still resolve by link — the page must say so rather than
+   *  offering an RSVP button that 404s on submit. */
+  status: z.enum(["published", "cancelled"]),
   /** Only populated for a scoped admin, so the organizer's "Copy invite link"
    *  works from the public page. Guests never receive it. */
   inviteCode: z.string().nullable(),
@@ -289,6 +292,9 @@ export const PendingItem = z.object({
 });
 export type PendingItem = z.infer<typeof PendingItem>;
 
+export const EventStatus = z.enum(["draft", "published", "cancelled"]);
+export type EventStatus = z.infer<typeof EventStatus>;
+
 export const OrgEventSummary = z.object({
   id: z.string(),
   shortCode: z.string(),
@@ -301,9 +307,52 @@ export const OrgEventSummary = z.object({
   approvedCount: z.number(),
   capacity: z.number().nullable(),
   model: EventModel,
+  status: EventStatus,
 });
 export type OrgEventSummary = z.infer<typeof OrgEventSummary>;
 
+/**
+ * Every field `PATCH /api/org/events/:id` can change, plus the read-only context
+ * the edit screen needs to explain itself (committee, invite code, whether the
+ * event still has a clean slate for deletion).
+ */
+export const OrgEventDetail = z.object({
+  id: z.string(),
+  shortCode: z.string(),
+  number: z.number(),
+  title: z.string(),
+  description: z.string(),
+  category: EventCategory,
+  audience: EventAudience,
+  model: EventModel,
+  capacity: z.number().nullable(),
+  startAt: z.string(),
+  endAt: z.string(),
+  location: z.string(),
+  locationShort: z.string().nullable(),
+  artwork: Artwork,
+  passStyle: PassStyle,
+  stampCommittee: z.boolean(),
+  allowPlusOne: z.boolean(),
+  flagship: z.boolean(),
+  updatesEmail: z.string(),
+  contactEmail: z.string(),
+  digest: Digest,
+  status: EventStatus,
+  listed: z.boolean(),
+  inviteCode: z.string().nullable(),
+  /** Full shareable URL — carries ?code= for invite-only events. */
+  shareUrl: z.string(),
+  committee: Committee,
+  /** Read-only on this screen: PATCH cannot change captures or host questions. */
+  questions: z.array(EventQuestion),
+  registrationCount: z.number(),
+  /** Drives the edit form's warning before an organizer removes the cap. */
+  waitlistCount: z.number(),
+  /** False once anyone has signed up — the UI offers Cancel instead of Delete. */
+  deletable: z.boolean(),
+});
+export type OrgEventDetail = z.infer<typeof OrgEventDetail>;
 
 export const Dashboard = z.object({
   event: z.object({
@@ -408,7 +457,7 @@ export const CreateEventBody = z.object({
 export type CreateEventBody = z.infer<typeof CreateEventBody>;
 
 export const UpdateEventBody = CreateEventBody.omit({ committeeId: true, captures: true, hostQuestions: true }).partial().extend({
-  status: z.enum(["draft", "published", "cancelled"]).optional(),
+  status: EventStatus.optional(),
 });
 export type UpdateEventBody = z.infer<typeof UpdateEventBody>;
 
@@ -590,6 +639,12 @@ export const contract = c.router(
         method: "GET",
         path: "/api/org/events/:id/dashboard",
         responses: { 200: Dashboard, 401: ErrorBody, 403: ErrorBody, 404: ErrorBody },
+      },
+      getEvent: {
+        method: "GET",
+        path: "/api/org/events/:id",
+        responses: { 200: OrgEventDetail, 401: ErrorBody, 403: ErrorBody, 404: ErrorBody },
+        summary: "Full editable event for the organizer edit screen",
       },
       approve: {
         method: "POST",
