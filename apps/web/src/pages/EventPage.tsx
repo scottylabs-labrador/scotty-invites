@@ -68,6 +68,10 @@ export default function EventPage() {
                 className="input mono"
                 placeholder="invite code"
                 value={inviteInput}
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
                 onChange={(e) => setInviteInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && setInviteCode(inviteInput.trim())}
               />
@@ -86,7 +90,11 @@ export default function EventPage() {
 }
 
 function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: string }) {
-  const codeSuffix = inviteCode ? `?code=${encodeURIComponent(inviteCode)}` : "";
+  // An organizer who arrived through "View event page" has no code in the URL,
+  // so fall back to the one the API hands scoped admins — otherwise their
+  // "copy link" produces a URL that lands recipients on the lock screen.
+  const shareCode = inviteCode || detail.inviteCode || "";
+  const codeSuffix = shareCode ? `?code=${encodeURIComponent(shareCode)}` : "";
   const eventPath = `/e/${detail.shortCode}${codeSuffix}`;
   const { me } = useAuth();
   const navigate = useNavigate();
@@ -224,7 +232,7 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
           <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
             <button className="icon-link" onClick={copyEventLink}>
               <LinkIcon size={14} />
-              {copied ? "Copied!" : "Copy event link"}
+              {copied ? "Copied!" : shareCode ? "Copy invite link" : "Copy event link"}
             </button>
             <a className="icon-link" href={`/api/events/${detail.shortCode}/google-calendar${codeSuffix}`} target="_blank" rel="noreferrer">
               <CalendarIcon size={14} />

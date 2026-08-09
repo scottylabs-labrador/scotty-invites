@@ -141,6 +141,9 @@ export const EventDetail = z.object({
   shortCode: z.string(),
   title: z.string(),
   description: z.string(),
+  /** Only populated for a scoped admin, so the organizer's "Copy invite link"
+   *  works from the public page. Guests never receive it. */
+  inviteCode: z.string().nullable(),
   number: z.number(),
   startAt: z.string(),
   endAt: z.string(),
@@ -300,6 +303,7 @@ export const OrgEventSummary = z.object({
   model: EventModel,
 });
 export type OrgEventSummary = z.infer<typeof OrgEventSummary>;
+
 
 export const Dashboard = z.object({
   event: z.object({

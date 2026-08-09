@@ -32,7 +32,7 @@ import {
 } from "../services/registrations";
 import { ensureTransfer, revokeTransfer, parseTransferToken, transferUrl } from "../services/transfers";
 import { getQuestionControls, setQuestionControl } from "../services/settings";
-import { newShortCode, newToken } from "../lib/crypto";
+import { newShortCode, newToken, newInviteCode } from "../lib/crypto";
 
 const s = initServer();
 
@@ -106,6 +106,26 @@ export function recordInviteFail(ip: string, eventId: string): void {
   const b = inviteFails.get(key);
   if (!b || b.resetAt < now) inviteFails.set(key, { count: 1, resetAt: now + 10 * 60 * 1000 });
   else b.count += 1;
+}
+
+/** An admin of the event's own committee, or any super admin. */
+export function isScopedAdminFor(ctx: AuthContext | null, committeeId: string): boolean {
+  if (!ctx?.admin) return false;
+  return ctx.admin.row.role === "super_admin" || ctx.admin.row.committeeId === committeeId;
+}
+
+/**
+ * A live pass for this event. A claimed +1 has no registration row of its own —
+ * the child ticket carries registrationId: null — so the gate has to look at
+ * tickets, or the person holding the pass can't open the event it's for.
+ */
+export async function userHoldsTicket(eventId: string, userId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: schema.tickets.id })
+    .from(schema.tickets)
+    .where(and(eq(schema.tickets.eventId, eventId), eq(schema.tickets.userId, userId), isNull(schema.tickets.revokedAt)))
+    .limit(1);
+  return rows.length > 0;
 }
 
 /** Admin scope filter: super admins see everything; committee admins see their committee. */
@@ -317,9 +337,9 @@ export const router = s.router(contract, {
 
       // Invite-only gate: needs the code unless registered or a scoped admin.
       if (e.model === "invite" && !myRegistration) {
-        const isScopedAdmin =
-          ctx?.admin && (ctx.admin.row.role === "super_admin" || ctx.admin.row.committeeId === e.committeeId);
-        if (!isScopedAdmin) {
+        // A claimed +1 holds a pass but no registration, so check tickets too.
+        const entitled = isScopedAdminFor(ctx, e.committeeId) || (ctx ? await userHoldsTicket(e.id, ctx.user.id) : false);
+        if (!entitled) {
           if (inviteAttemptsExceeded(request.ip, e.id)) {
             return { status: 401, body: { error: "invite_code_required", message: "Too many code attempts — wait a few minutes and try again." } };
           }
@@ -345,6 +365,9 @@ export const router = s.router(contract, {
         shortCode: e.shortCode,
         title: e.title,
         description: e.description,
+        // Organizers only, so their "Copy invite link" works from the public
+        // page. Guests share the URL they arrived on.
+        inviteCode: isScopedAdminFor(ctx, e.committeeId) ? e.inviteCode : null,
         number: e.number,
         startAt: e.startAt.toISOString(),
         endAt: e.endAt.toISOString(),
@@ -386,9 +409,7 @@ export const router = s.router(contract, {
       if (!event || event.status !== "published") return { status: 404, body: { error: "not_found", message: "Event not found" } };
       if (event.endAt < new Date()) return { status: 400, body: { error: "ended", message: "This event already ended." } };
       if (event.model === "invite") {
-        const isScopedAdmin =
-          ctx.admin && (ctx.admin.row.role === "super_admin" || ctx.admin.row.committeeId === event.committeeId);
-        if (!isScopedAdmin) {
+        if (!isScopedAdminFor(ctx, event.committeeId)) {
           if (inviteAttemptsExceeded(request.ip, event.id)) {
             return { status: 400, body: { error: "invite_code", message: "Too many code attempts — wait a few minutes and try again." } };
           }
@@ -912,7 +933,7 @@ export const router = s.router(contract, {
 
       if (Object.keys(patch).length === 0) return { status: 400, body: { error: "empty", message: "Nothing to update." } };
       if (body.model === "invite" && !scoped.event.inviteCode) {
-        patch.inviteCode = newToken(6).replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toLowerCase();
+        patch.inviteCode = newInviteCode();
       }
       await db.update(schema.events).set(patch).where(eq(schema.events.id, params.id));
       if (patch.capacity !== undefined || patch.model !== undefined) await promoteWaitlist(params.id);
@@ -943,7 +964,7 @@ export const router = s.router(contract, {
 
       const controls = await getQuestionControls();
       const shortCode = newShortCode();
-      const inviteCode = body.model === "invite" ? newToken(6).replace(/[^a-zA-Z0-9]/g, "").slice(0, 8).toLowerCase() : null;
+      const inviteCode = body.model === "invite" ? newInviteCode() : null;
 
       const inserted = await db
         .insert(schema.events)

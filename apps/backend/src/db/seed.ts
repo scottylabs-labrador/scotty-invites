@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { db, schema } from "./client";
 import { env, isCmuEmail } from "../env";
+import { newInviteCode } from "../lib/crypto";
 
 export const COMMITTEES: { slug: string; name: string; color: string; isAllClub?: boolean }[] = [
   { slug: "scottylabs", name: "ScottyLabs", color: "#1e1e1e", isAllClub: true },
@@ -42,4 +43,27 @@ export async function seed(): Promise<void> {
     }
     console.log(`[db] seeded super admins: ${env.seedSuperAdminEmails.join(", ")}`);
   }
+
+  await backfillInviteCodes();
+}
+
+/**
+ * Repairs invite-only events that have no invite code. Until the update handler
+ * learned to mint one, switching an event to invite-only via PATCH left the code
+ * NULL — and a NULL code matched an empty submission, so the gate let everyone in.
+ * Idempotent: only touches rows that are actually broken.
+ */
+async function backfillInviteCodes(): Promise<void> {
+  const broken = await db
+    .select({ id: schema.events.id, shortCode: schema.events.shortCode })
+    .from(schema.events)
+    .where(and(eq(schema.events.model, "invite"), or(isNull(schema.events.inviteCode), eq(schema.events.inviteCode, ""))));
+  if (broken.length === 0) return;
+
+  for (const e of broken) {
+    await db.update(schema.events).set({ inviteCode: newInviteCode(), listed: false }).where(eq(schema.events.id, e.id));
+  }
+  console.log(
+    `[db] repaired ${broken.length} invite-only event(s) with no invite code: ${broken.map((e) => e.shortCode).join(", ")}`,
+  );
 }
