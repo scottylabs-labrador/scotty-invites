@@ -17,6 +17,15 @@ export function newSixDigitCode(): string {
   return String(randomInt(0, 1000000)).padStart(6, "0");
 }
 
+/**
+ * Invite code for an invite-only event. Reuses the short-code alphabet (no
+ * i/l/o/0/1) because people read these off a Slack message and type them on a
+ * phone. ~31^8 ≈ 8.5e11 possibilities.
+ */
+export function newInviteCode(): string {
+  return newShortCode(8);
+}
+
 export function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }

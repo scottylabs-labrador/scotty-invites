@@ -7,6 +7,7 @@ import { api, unwrap } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { Page, Spinner, Tag } from "../components/AppShell";
 import {
+  AlertCircleIcon,
   ArrowLeftIcon,
   CalendarIcon,
   CheckIcon,
@@ -68,6 +69,10 @@ export default function EventPage() {
                 className="input mono"
                 placeholder="invite code"
                 value={inviteInput}
+                autoCapitalize="off"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
                 onChange={(e) => setInviteInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && setInviteCode(inviteInput.trim())}
               />
@@ -86,8 +91,13 @@ export default function EventPage() {
 }
 
 function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: string }) {
-  const codeSuffix = inviteCode ? `?code=${encodeURIComponent(inviteCode)}` : "";
+  // An organizer who arrived through "View event page" has no code in the URL,
+  // so fall back to the one the API hands scoped admins — otherwise their
+  // "copy link" produces a URL that lands recipients on the lock screen.
+  const shareCode = inviteCode || detail.inviteCode || "";
+  const codeSuffix = shareCode ? `?code=${encodeURIComponent(shareCode)}` : "";
   const eventPath = `/e/${detail.shortCode}${codeSuffix}`;
+  const cancelled = detail.status === "cancelled";
   const { me } = useAuth();
   const navigate = useNavigate();
   const qc = useQueryClient();
@@ -224,7 +234,7 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
           <div style={{ borderTop: "1px solid var(--border-subtle)", paddingTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
             <button className="icon-link" onClick={copyEventLink}>
               <LinkIcon size={14} />
-              {copied ? "Copied!" : "Copy event link"}
+              {copied ? "Copied!" : shareCode ? "Copy invite link" : "Copy event link"}
             </button>
             <a className="icon-link" href={`/api/events/${detail.shortCode}/google-calendar${codeSuffix}`} target="_blank" rel="noreferrer">
               <CalendarIcon size={14} />
@@ -237,6 +247,7 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
       {/* right column */}
       <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", flex: "1 1 460px", minWidth: 0 }}>
         <div style={{ display: "flex", gap: 8, fontFamily: "var(--font-ui)", flexWrap: "wrap" }}>
+          {cancelled && <Tag tone="danger">Cancelled</Tag>}
           {detail.flagship && <Tag tone="blue">Flagship</Tag>}
           {detail.model === "approval" && <Tag tone="warning">Approval required</Tag>}
           {detail.model === "invite" && <Tag tone="neutral">Invite only</Tag>}
@@ -292,7 +303,23 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
             </div>
           )}
 
-          {state === "open" && !me.user && (
+          {cancelled && (
+            <div style={{ padding: "32px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
+              <div style={{ width: 44, height: 44, borderRadius: 100, background: "#fbe9ed", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <AlertCircleIcon size={20} style={{ color: "var(--danger)" }} />
+              </div>
+              <div style={{ fontFamily: "var(--font-brand)", fontSize: 20, fontWeight: 700, color: "var(--text)" }}>This event was cancelled</div>
+              <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--muted-1)", maxWidth: 380 }}>
+                Signups are closed. {detail.myRegistration ? "Your pass for it is no longer valid — " : ""}
+                Questions? <a href={`mailto:${detail.contactEmail}`} className="link-blue">{detail.contactEmail}</a>.
+              </p>
+              <Link to="/" className="pill pill-outline" style={{ marginTop: 6, fontSize: 13, padding: "9px 20px" }}>
+                Browse other events
+              </Link>
+            </div>
+          )}
+
+          {!cancelled && state === "open" && !me.user && (
             <div style={{ padding: "32px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
               <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--muted-1)", maxWidth: 380 }}>
                 Sign in with your CMU email to {detail.model === "approval" ? "request an invite" : "sign up"} — it takes two clicks.
@@ -303,7 +330,7 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
             </div>
           )}
 
-          {state === "open" && me.user && (
+          {!cancelled && state === "open" && me.user && (
             <div style={{ padding: 24, display: "flex", flexDirection: "column", gap: 18 }}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
                 <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -465,7 +492,7 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
             </div>
           )}
 
-          {(state === "pending" || state === "waitlisted") && (
+          {!cancelled && (state === "pending" || state === "waitlisted") && (
             <div className="fade-in" style={{ padding: "32px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
               <div style={{ width: 44, height: 44, borderRadius: 100, background: "var(--blue-subtle)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <ClockIcon size={20} style={{ color: "var(--blue)" }} />
@@ -484,7 +511,7 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
             </div>
           )}
 
-          {state === "approved" && (
+          {!cancelled && state === "approved" && (
             <div className="fade-in" style={{ padding: "32px 24px", display: "flex", flexDirection: "column", alignItems: "center", gap: 12, textAlign: "center" }}>
               <div style={{ width: 44, height: 44, borderRadius: 100, background: "var(--success-bg)", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <CheckIcon size={20} style={{ color: "var(--success)" }} />

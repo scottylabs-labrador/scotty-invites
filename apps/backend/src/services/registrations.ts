@@ -231,17 +231,23 @@ export async function approveRegistration(registrationId: string): Promise<{ ok:
 /**
  * Promotes waitlisted registrations (in signup order) while capacity allows.
  * Returns how many guests were promoted; emails each of them their ticket.
+ *
+ * An event with NO capacity promotes everyone still waiting. A waitlist only
+ * exists because a cap once existed, so removing the cap — by raising it away
+ * or by switching the event off the capacity model — must not leave people
+ * stranded in a queue that can never move again.
  */
 export async function promoteWaitlist(eventId: string): Promise<number> {
   const promotions: { email: string; fullName: string; serial: string; number: number }[] = [];
 
   const event = (await db.select().from(schema.events).where(eq(schema.events.id, eventId)))[0];
-  if (!event || event.capacity === null) return 0;
+  if (!event) return 0;
+  const uncapped = event.capacity === null;
 
   await db.transaction(async (tx) => {
     await lockEvent(tx, eventId);
     let approved = await approvedCountTx(tx, eventId);
-    if (approved >= event.capacity!) return;
+    if (!uncapped && approved >= event.capacity!) return;
 
     const waiting = await tx
       .select({ registration: schema.registrations, user: schema.users })
@@ -251,7 +257,7 @@ export async function promoteWaitlist(eventId: string): Promise<number> {
       .orderBy(asc(schema.registrations.createdAt));
 
     for (const w of waiting) {
-      if (approved >= event.capacity!) break;
+      if (!uncapped && approved >= event.capacity!) break;
       await tx
         .update(schema.registrations)
         .set({ status: "approved", decidedAt: new Date() })
@@ -276,6 +282,21 @@ export async function promoteWaitlist(eventId: string): Promise<number> {
     }
   }
   return promotions.length;
+}
+
+/**
+ * Approval events have no waitlist — the organizer decides individually. If an
+ * event is switched onto the approval model while people are waitlisted, they
+ * go back into the review queue instead of sitting in a queue the new model
+ * never drains.
+ */
+export async function waitlistToPending(eventId: string): Promise<number> {
+  const moved = await db
+    .update(schema.registrations)
+    .set({ status: "pending", decidedAt: null })
+    .where(and(eq(schema.registrations.eventId, eventId), eq(schema.registrations.status, "waitlisted")))
+    .returning({ id: schema.registrations.id });
+  return moved.length;
 }
 
 /**

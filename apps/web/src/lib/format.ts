@@ -87,6 +87,20 @@ export function nyWallClockToUtc(date: string, time: string): Date {
   return new Date(instant);
 }
 
+/** Inverse of nyWallClockToUtc — splits a UTC instant back into the NY wall-clock
+ *  date + time pair the create/edit form's <input type="date"|"time"> expect. */
+export function utcToNyWallClock(iso: string): { date: string; time: string } {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: TZ,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(d(iso));
+  const hour = parts.find((p) => p.type === "hour")?.value ?? "00";
+  const minute = parts.find((p) => p.type === "minute")?.value ?? "00";
+  return { date: nyDayKey(iso), time: `${hour}:${minute}` };
+}
+
 export const GRADIENTS: Record<string, string> = {
   brand: "conic-gradient(from 180deg at 50% 50%, #d72444 0%, #8766d4 25%, #0e96d1 55%, #063f58 80%, #d72444 100%)",
   cool: "linear-gradient(135deg,#0e96d1 0%,#6940c9 100%)",

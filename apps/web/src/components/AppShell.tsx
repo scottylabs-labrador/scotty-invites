@@ -146,7 +146,7 @@ export function Tag({
   upper = true,
 }: {
   children: ReactNode;
-  tone?: "neutral" | "blue" | "warning" | "success" | "committee" | "purple";
+  tone?: "neutral" | "blue" | "warning" | "success" | "committee" | "purple" | "danger";
   upper?: boolean;
   color?: string;
 }) {
@@ -157,6 +157,7 @@ export function Tag({
     success: { color: "#0d4b17", background: "#e9f5ec", border: "1px solid #cde8d4" },
     committee: { color: "#063f58", background: "rgba(6,63,88,0.07)", border: "1px solid #aebdcc" },
     purple: { color: "#6940c9", background: "rgba(105,64,201,0.08)", border: "1px solid #c9b8ee" },
+    danger: { color: "#5a0f1d", background: "#fbe9ed", border: "1px solid #f3c2cd" },
   };
   const t = tones[tone];
   return (

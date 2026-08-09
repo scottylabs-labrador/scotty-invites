@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { db, schema } from "./db/client";
 import { env } from "./env";
-import { router, contract, setSessionCookie, deriveLocationShort, inviteCodeMatches, inviteAttemptsExceeded, recordInviteFail } from "./routes/router";
+import { router, contract, setSessionCookie, deriveLocationShort, inviteCodeMatches, userHoldsTicket, inviteAttemptsExceeded, recordInviteFail } from "./routes/router";
 import { resolveSession, verifyByToken, type AuthContext } from "./auth/service";
 import { buildIcs, googleCalendarUrl } from "./lib/ics";
 import { registerOauthRoutes } from "./oauth/routes";
@@ -360,7 +360,13 @@ export async function buildServer(): Promise<FastifyInstance> {
     // Unlisted (invite-only) events don't leak details without the code, and
     // guessing is throttled here too so the calendar route isn't a code oracle.
     const supplied = (request.query as { code?: string }).code;
-    if (!e.listed && !request.authCtx?.admin) {
+    // A guest holding a pass (including a claimed +1, which has no registration
+    // of its own) has already proved entitlement and shouldn't need the code
+    // again just to add the event to their calendar. The attempt cap still
+    // guards the code path itself, so a holder is never rate-limited out of
+    // their own event.
+    const holder = request.authCtx ? await userHoldsTicket(e.id, request.authCtx.user.id) : false;
+    if (!e.listed && !request.authCtx?.admin && !holder) {
       if (inviteAttemptsExceeded(request.ip, e.id) || !inviteCodeMatches(e, supplied)) {
         if (supplied && !inviteCodeMatches(e, supplied)) recordInviteFail(request.ip, e.id);
         return reply.status(404).send({ error: "not_found", message: "Event not found" });
@@ -391,7 +397,13 @@ export async function buildServer(): Promise<FastifyInstance> {
     const e = rows[0];
     if (!e || e.status !== "published") return reply.status(404).send({ error: "not_found", message: "Event not found" });
     const supplied = (request.query as { code?: string }).code;
-    if (!e.listed && !request.authCtx?.admin) {
+    // A guest holding a pass (including a claimed +1, which has no registration
+    // of its own) has already proved entitlement and shouldn't need the code
+    // again just to add the event to their calendar. The attempt cap still
+    // guards the code path itself, so a holder is never rate-limited out of
+    // their own event.
+    const holder = request.authCtx ? await userHoldsTicket(e.id, request.authCtx.user.id) : false;
+    if (!e.listed && !request.authCtx?.admin && !holder) {
       if (inviteAttemptsExceeded(request.ip, e.id) || !inviteCodeMatches(e, supplied)) {
         if (supplied && !inviteCodeMatches(e, supplied)) recordInviteFail(request.ip, e.id);
         return reply.status(404).send({ error: "not_found", message: "Event not found" });

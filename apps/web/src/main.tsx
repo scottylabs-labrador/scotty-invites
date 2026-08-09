@@ -13,6 +13,7 @@ import ClaimPage from "./pages/ClaimPage";
 import OrganizePage from "./pages/OrganizePage";
 import ScannerPage from "./pages/ScannerPage";
 import CreateEventPage from "./pages/CreateEventPage";
+import EditEventPage from "./pages/EditEventPage";
 import AdminPage from "./pages/AdminPage";
 
 const queryClient = new QueryClient({
@@ -35,6 +36,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             <Route path="/organize" element={<OrganizePage />} />
             <Route path="/organize/new" element={<CreateEventPage />} />
             <Route path="/organize/:id" element={<OrganizePage />} />
+            <Route path="/organize/:id/edit" element={<EditEventPage />} />
             <Route path="/organize/:id/checkin" element={<ScannerPage />} />
             <Route path="/admin" element={<AdminPage />} />
             <Route path="*" element={<BrowsePage />} />
