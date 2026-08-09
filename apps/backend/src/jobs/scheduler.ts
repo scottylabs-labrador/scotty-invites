@@ -33,10 +33,11 @@ async function runDigests(): Promise<void> {
     const approved = regs.filter((r) => r.status === "approved").length;
     const waitlist = regs.filter((r) => r.status === "waitlisted").length;
 
-    await db.update(schema.events).set({ lastDigestAt: now }).where(eq(schema.events.id, event.id));
-
-    // Only email when there is something to report.
-    if (newSignups === 0 && pendingCount === 0) continue;
+    // Nothing to report: just advance the window so we don't recount later.
+    if (newSignups === 0 && pendingCount === 0) {
+      await db.update(schema.events).set({ lastDigestAt: now }).where(eq(schema.events.id, event.id));
+      continue;
+    }
 
     const mail = digestEmail({
       ev: eventEmailInfo(event, committee.name),
@@ -48,7 +49,10 @@ async function runDigests(): Promise<void> {
       dashboardUrl: `${env.appUrl}/organize/${event.id}`,
       cadence: event.digest,
     });
-    await sendMail({ to: event.updatesEmail, ...mail });
+    const sent = await sendMail({ to: event.updatesEmail, ...mail });
+    // Only advance the window once the digest actually went out — a failed
+    // send must not silently swallow this batch of signups.
+    if (sent.ok) await db.update(schema.events).set({ lastDigestAt: now }).where(eq(schema.events.id, event.id));
   }
 }
 
@@ -64,6 +68,8 @@ async function runEscalations(): Promise<void> {
         eq(schema.registrations.status, "pending"),
         lt(schema.registrations.createdAt, cutoff),
         isNull(schema.registrations.escalatedAt),
+        eq(schema.events.status, "published"),
+        gte(schema.events.endAt, new Date()),
       ),
     );
 
@@ -102,13 +108,18 @@ async function runWaitlistSweep(): Promise<void> {
 }
 
 export function startScheduler(): void {
+  let ticking = false;
   const tick = async () => {
+    if (ticking) return; // never let a slow tick overlap the next — breaks exactly-once escalation
+    ticking = true;
     try {
       await runDigests();
       await runEscalations();
       await runWaitlistSweep();
     } catch (err) {
       console.error("[scheduler] tick failed:", err);
+    } finally {
+      ticking = false;
     }
   };
   setTimeout(tick, 15_000).unref();

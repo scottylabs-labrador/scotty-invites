@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { db, schema } from "./db/client";
 import { env } from "./env";
-import { router, contract, setSessionCookie, deriveLocationShort, inviteCodeMatches } from "./routes/router";
+import { router, contract, setSessionCookie, deriveLocationShort, inviteCodeMatches, inviteAttemptsExceeded, recordInviteFail } from "./routes/router";
 import { resolveSession, verifyByToken, type AuthContext } from "./auth/service";
 import { buildIcs, googleCalendarUrl } from "./lib/ics";
 import { registerOauthRoutes } from "./oauth/routes";
@@ -97,16 +97,31 @@ export async function buildServer(): Promise<FastifyInstance> {
     request.authCtx = await resolveSession(request.cookies[SESSION_COOKIE]);
   });
 
-  // Security headers everywhere.
+  // Security headers everywhere. Framing is denied on ALL responses — nothing
+  // in this app is meant to be embedded, and the OAuth consent + magic-link
+  // confirmation pages are served under /api as HTML, so exempting /api would
+  // have left them clickjackable.
   app.addHook("onSend", async (request, reply) => {
     reply.header("X-Content-Type-Options", "nosniff");
     reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
-    if (!request.url.startsWith("/api")) {
-      reply.header("X-Frame-Options", "DENY");
-    }
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Content-Security-Policy", "frame-ancestors 'none'");
     if (env.isProd) {
       reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     }
+  });
+
+  // Global error handler — never let a raw error (e.g. a Postgres exception,
+  // which carries the failing SQL + bound params) reach the client. Log the
+  // full detail server-side; return a generic, safe body.
+  app.setErrorHandler((err, request, reply) => {
+    request.log.error({ err }, "unhandled request error");
+    if ((err as { validation?: unknown }).validation) {
+      return reply.status(400).send({ error: "bad_request", message: "That request was malformed." });
+    }
+    const status = err.statusCode && err.statusCode >= 400 && err.statusCode < 500 ? err.statusCode : 500;
+    if (status < 500) return reply.status(status).send({ error: "request_error", message: err.message });
+    return reply.status(500).send({ error: "internal", message: "Something went wrong on our end." });
   });
 
   // ---------------------------------------------------------------- ts-rest
@@ -178,7 +193,9 @@ export async function buildServer(): Promise<FastifyInstance> {
     return reply.send({ id: inserted[0].id, filename: inserted[0].filename, url: `${env.apiUrl}/api/files/${inserted[0].id}` });
   });
 
-  // Resume download — owner or any admin.
+  // Resume download — owner, super admin, or an admin OF THE COMMITTEE whose
+  // event the resume was submitted to. Committee scoping mirrors every other
+  // guest-data surface; a Tech admin must not read a Foundry applicant's resume.
   app.get("/api/files/:id", async (request, reply) => {
     const ctx = request.authCtx;
     if (!ctx) return reply.status(401).send({ error: "unauthorized", message: "Sign in first." });
@@ -187,9 +204,23 @@ export async function buildServer(): Promise<FastifyInstance> {
     const rows = await db.select().from(schema.files).where(eq(schema.files.id, id));
     const file = rows[0];
     if (!file) return reply.status(404).send({ error: "not_found", message: "No such file." });
-    if (file.ownerUserId !== ctx.user.id && !ctx.admin) {
-      return reply.status(403).send({ error: "forbidden", message: "Not yours to read." });
+
+    let allowed = file.ownerUserId === ctx.user.id;
+    if (!allowed && ctx.admin) {
+      if (ctx.admin.row.role === "super_admin") {
+        allowed = true;
+      } else {
+        // Only if this file is attached to a registration on one of the admin's committee's events.
+        const scoped = await db
+          .select({ committeeId: schema.events.committeeId })
+          .from(schema.registrations)
+          .innerJoin(schema.events, eq(schema.registrations.eventId, schema.events.id))
+          .where(eq(schema.registrations.resumeFileId, id));
+        allowed = scoped.some((r) => r.committeeId === ctx.admin!.row.committeeId);
+      }
     }
+    if (!allowed) return reply.status(403).send({ error: "forbidden", message: "Not yours to read." });
+
     reply.header("Content-Type", file.contentType);
     reply.header("Content-Disposition", `attachment; filename="${file.filename.replace(/[^\w.\- ]/g, "_")}"`);
     return reply.send(file.data);
@@ -326,10 +357,14 @@ export async function buildServer(): Promise<FastifyInstance> {
     const rows = await db.select().from(schema.events).where(eq(schema.events.shortCode, code));
     const e = rows[0];
     if (!e || e.status !== "published") return reply.status(404).send({ error: "not_found", message: "Event not found" });
-    // Unlisted (invite-only) events don't leak details without the code.
+    // Unlisted (invite-only) events don't leak details without the code, and
+    // guessing is throttled here too so the calendar route isn't a code oracle.
     const supplied = (request.query as { code?: string }).code;
-    if (!e.listed && !inviteCodeMatches(e, supplied) && !request.authCtx?.admin) {
-      return reply.status(404).send({ error: "not_found", message: "Event not found" });
+    if (!e.listed && !request.authCtx?.admin) {
+      if (inviteAttemptsExceeded(request.ip, e.id) || !inviteCodeMatches(e, supplied)) {
+        if (supplied && !inviteCodeMatches(e, supplied)) recordInviteFail(request.ip, e.id);
+        return reply.status(404).send({ error: "not_found", message: "Event not found" });
+      }
     }
     const ics = buildIcs(
       [
@@ -356,8 +391,11 @@ export async function buildServer(): Promise<FastifyInstance> {
     const e = rows[0];
     if (!e || e.status !== "published") return reply.status(404).send({ error: "not_found", message: "Event not found" });
     const supplied = (request.query as { code?: string }).code;
-    if (!e.listed && !inviteCodeMatches(e, supplied) && !request.authCtx?.admin) {
-      return reply.status(404).send({ error: "not_found", message: "Event not found" });
+    if (!e.listed && !request.authCtx?.admin) {
+      if (inviteAttemptsExceeded(request.ip, e.id) || !inviteCodeMatches(e, supplied)) {
+        if (supplied && !inviteCodeMatches(e, supplied)) recordInviteFail(request.ip, e.id);
+        return reply.status(404).send({ error: "not_found", message: "Event not found" });
+      }
     }
     return reply.redirect(
       googleCalendarUrl({

@@ -409,30 +409,37 @@ export const router = s.router(contract, {
       if (existing[0] && !["cancelled", "declined"].includes(existing[0].status)) {
         return { status: 409, body: { error: "already_registered", message: "You already signed up for this one." } };
       }
-      if (existing[0]) {
-        // Re-registering after cancel/decline: clear the old row (cascade removes answers).
-        await db.delete(schema.answers).where(eq(schema.answers.registrationId, existing[0].id));
-        await db.update(schema.tickets).set({ registrationId: null }).where(eq(schema.tickets.registrationId, existing[0].id));
-        await db.delete(schema.registrations).where(eq(schema.registrations.id, existing[0].id));
-      }
 
-      // Validate custom answers against this event's questions.
+      // Validate custom answers against this event's questions. Dedupe by
+      // questionId so a repeated id in the payload can't trip the answers
+      // unique index (which would otherwise 500 mid-write).
       const questions = await db
         .select()
         .from(schema.eventQuestions)
         .where(and(eq(schema.eventQuestions.eventId, event.id), eq(schema.eventQuestions.visible, true)));
       const questionById = new Map(questions.map((q) => [q.id, q]));
+      const seenQ = new Set<string>();
       const customAnswers = (body.custom ?? []).filter((a) => {
         const q = questionById.get(a.questionId);
         const answerable = q && (q.kind === "custom" || q.key === "phone" || q.key === "tshirt");
-        return !!answerable && a.value.trim().length > 0;
+        if (!answerable || a.value.trim().length === 0 || seenQ.has(a.questionId)) return false;
+        seenQ.add(a.questionId);
+        return true;
       });
 
+      // Validate resume ownership BEFORE any destructive mutation.
       if (body.resumeFileId) {
         const file = await db.select().from(schema.files).where(eq(schema.files.id, body.resumeFileId));
         if (!file[0] || file[0].ownerUserId !== ctx.user.id) {
           return { status: 400, body: { error: "bad_file", message: "That resume upload doesn't belong to you." } };
         }
+      }
+
+      // Only now, after all validation passes, clear a prior cancelled/declined row.
+      if (existing[0]) {
+        await db.delete(schema.answers).where(eq(schema.answers.registrationId, existing[0].id));
+        await db.update(schema.tickets).set({ registrationId: null }).where(eq(schema.tickets.registrationId, existing[0].id));
+        await db.delete(schema.registrations).where(eq(schema.registrations.id, existing[0].id));
       }
 
       await db.update(schema.users).set({ name: body.fullName }).where(eq(schema.users.id, ctx.user.id));
@@ -1278,6 +1285,12 @@ export const router = s.router(contract, {
         return { status: 400, body: { error: "self", message: "You can't revoke your own access." } };
       }
       await db.delete(schema.admins).where(eq(schema.admins.id, params.id));
+      // Revoking event tools must also cut this person's MCP data access —
+      // otherwise a stale token keeps working until it expires.
+      await db
+        .update(schema.mcpTokens)
+        .set({ revokedAt: new Date() })
+        .where(and(eq(schema.mcpTokens.email, rows[0].email), isNull(schema.mcpTokens.revokedAt)));
       return { status: 200, body: { ok: true } };
     },
 

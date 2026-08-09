@@ -278,6 +278,34 @@ export async function promoteWaitlist(eventId: string): Promise<number> {
   return promotions.length;
 }
 
+/**
+ * Revokes a registration's primary ticket AND any claimed +1 child (linked by
+ * parentTicketId, registrationId is null on the child) and marks the +1
+ * transfer revoked. Used by both decline and cancel so the two paths can't
+ * disagree — a removed guest's +1 must never still scan in at the door.
+ */
+async function revokeRegistrationTickets(tx: Tx, registrationId: string): Promise<void> {
+  const now = new Date();
+  const primary = await tx
+    .select({ id: schema.tickets.id })
+    .from(schema.tickets)
+    .where(eq(schema.tickets.registrationId, registrationId));
+  await tx
+    .update(schema.tickets)
+    .set({ revokedAt: now })
+    .where(and(eq(schema.tickets.registrationId, registrationId), isNull(schema.tickets.revokedAt)));
+  if (primary[0]) {
+    await tx
+      .update(schema.tickets)
+      .set({ revokedAt: now })
+      .where(and(eq(schema.tickets.parentTicketId, primary[0].id), isNull(schema.tickets.revokedAt)));
+    await tx
+      .update(schema.ticketTransfers)
+      .set({ status: "revoked", revokedAt: now })
+      .where(and(eq(schema.ticketTransfers.ticketId, primary[0].id), eq(schema.ticketTransfers.status, "active")));
+  }
+}
+
 export async function declineRegistration(registrationId: string): Promise<{ ok: boolean; promoted: number; message?: string }> {
   const result = await db.transaction(async (tx) => {
     const rows = await tx
@@ -288,24 +316,26 @@ export async function declineRegistration(registrationId: string): Promise<{ ok:
       .where(eq(schema.registrations.id, registrationId));
     const row = rows[0];
     if (!row) return { ok: false as const, message: "Registration not found" };
-    if (["declined", "cancelled"].includes(row.registration.status)) return { ok: true as const, row, wasApproved: false };
+    if (["declined", "cancelled"].includes(row.registration.status)) return { ok: true as const, row, wasApproved: false, already: true };
 
     await lockEvent(tx, row.event.id);
-    const wasApproved = row.registration.status === "approved";
+    // Re-read status under the lock — an approve may have committed between the
+    // pre-lock SELECT and here, which would otherwise leave a live ticket.
+    const fresh = await tx
+      .select({ status: schema.registrations.status })
+      .from(schema.registrations)
+      .where(eq(schema.registrations.id, registrationId));
+    const wasApproved = fresh[0]?.status === "approved";
     await tx
       .update(schema.registrations)
       .set({ status: "declined", decidedAt: new Date() })
       .where(eq(schema.registrations.id, registrationId));
-    if (wasApproved) {
-      await tx
-        .update(schema.tickets)
-        .set({ revokedAt: new Date() })
-        .where(and(eq(schema.tickets.registrationId, registrationId), isNull(schema.tickets.revokedAt)));
-    }
-    return { ok: true as const, row, wasApproved };
+    if (wasApproved) await revokeRegistrationTickets(tx, registrationId);
+    return { ok: true as const, row, wasApproved, already: false };
   });
 
   if (!result.ok) return { ok: false, promoted: 0, message: result.message };
+  if (result.already) return { ok: true, promoted: 0 }; // idempotent — don't re-email
 
   const cName = await committeeName(result.row.event.committeeId);
   const mail = declinedEmail({ ev: eventEmailInfo(result.row.event, cName) });
@@ -326,25 +356,13 @@ export async function cancelRegistration(registrationId: string, userId: string)
     if (["cancelled", "declined"].includes(reg.status)) return { ok: true as const, eventId: reg.eventId, wasApproved: false };
 
     await lockEvent(tx, reg.eventId);
-    const wasApproved = reg.status === "approved";
+    const fresh = await tx
+      .select({ status: schema.registrations.status })
+      .from(schema.registrations)
+      .where(eq(schema.registrations.id, reg.id));
+    const wasApproved = fresh[0]?.status === "approved";
     await tx.update(schema.registrations).set({ status: "cancelled", decidedAt: new Date() }).where(eq(schema.registrations.id, reg.id));
-    if (wasApproved) {
-      await tx
-        .update(schema.tickets)
-        .set({ revokedAt: new Date() })
-        .where(and(eq(schema.tickets.registrationId, reg.id), isNull(schema.tickets.revokedAt)));
-      // Revoking the primary also invalidates a claimed +1.
-      const primary = await tx
-        .select({ id: schema.tickets.id })
-        .from(schema.tickets)
-        .where(eq(schema.tickets.registrationId, reg.id));
-      if (primary[0]) {
-        await tx
-          .update(schema.tickets)
-          .set({ revokedAt: new Date() })
-          .where(and(eq(schema.tickets.parentTicketId, primary[0].id), isNull(schema.tickets.revokedAt)));
-      }
-    }
+    if (wasApproved) await revokeRegistrationTickets(tx, reg.id);
     return { ok: true as const, eventId: reg.eventId, wasApproved };
   });
 
@@ -376,6 +394,8 @@ export async function claimTransfer(opts: {
     if (row.transfer.status === "claimed") return { ok: false as const, message: "This +1 was already claimed." };
     if (row.transfer.status === "revoked") return { ok: false as const, message: "This +1 link was revoked by its owner." };
     if (row.ticket.revokedAt) return { ok: false as const, message: "The host's invite is no longer valid." };
+    if (row.event.status !== "published") return { ok: false as const, message: "This event is no longer taking guests." };
+    if (row.event.endAt < new Date()) return { ok: false as const, message: "This event has already ended." };
     if (row.ticket.userId === opts.claimer.id) return { ok: false as const, message: "That's your own +1 link — send it to a friend instead." };
 
     await lockEvent(tx, row.event.id);
@@ -471,6 +491,35 @@ export async function checkinBySerial(opts: {
 
   const guestName = row.user.name ?? row.user.email.split("@")[0];
   const isPlusOne = row.ticket.kind === "plus_one";
+
+  // Door-side defense: a +1 is only valid if its host's primary pass is still
+  // valid. Even if a child ticket were ever left un-revoked, deny it here.
+  if (isPlusOne && row.ticket.parentTicketId) {
+    const parent = await db
+      .select({ revokedAt: schema.tickets.revokedAt })
+      .from(schema.tickets)
+      .where(eq(schema.tickets.id, row.ticket.parentTicketId));
+    if (!parent[0] || parent[0].revokedAt) {
+      await db.insert(schema.checkins).values({
+        eventId: opts.eventId,
+        ticketId: row.ticket.id,
+        serialAttempted: serial,
+        result: "denied",
+        plusOne: true,
+        method: opts.method,
+        byEmail: opts.byEmail,
+      });
+      return {
+        result: "denied",
+        guestName,
+        serial,
+        plusOne: true,
+        hostName: null,
+        originalAt: null,
+        message: "The host's invite was revoked — send them to registration.",
+      };
+    }
+  }
 
   const existing = await db
     .select()

@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import { db, schema } from "../db/client";
 import { env, isCmuEmail } from "../env";
 import { newToken, newSixDigitCode, sha256, initialsOf } from "../lib/crypto";
@@ -174,23 +174,35 @@ export async function consumeCode(
     .limit(1);
   const link = links[0];
   if (!link) return { error: "invalid", message: "That code expired or was already used — request a new one." };
-  if (link.attempts >= MAX_VERIFY_ATTEMPTS) {
-    return { error: "attempts", message: "Too many wrong tries — request a new code." };
-  }
-  if (sha256(code) !== link.codeHash) {
-    await db
-      .update(schema.magicLinks)
-      .set({ attempts: sql`${schema.magicLinks.attempts} + 1` })
-      .where(eq(schema.magicLinks.id, link.id));
-    return { error: "wrong_code", message: "That's not the code we sent — check the newest email." };
-  }
+
+  // Atomic consume-if-correct: the code check, the single-use guard, and the
+  // attempt cap all live in the WHERE clause, so concurrent /verify requests
+  // can never each observe attempts<cap and slip past it (TOCTOU brute force).
   const consumed = await db
     .update(schema.magicLinks)
     .set({ consumedAt: now })
-    .where(and(eq(schema.magicLinks.id, link.id), isNull(schema.magicLinks.consumedAt)))
+    .where(
+      and(
+        eq(schema.magicLinks.id, link.id),
+        isNull(schema.magicLinks.consumedAt),
+        lt(schema.magicLinks.attempts, MAX_VERIFY_ATTEMPTS),
+        eq(schema.magicLinks.codeHash, sha256(code)),
+      ),
+    )
     .returning();
-  if (consumed.length === 0) return { error: "invalid", message: "That code was already used — request a new one." };
-  return { link };
+  if (consumed.length > 0) return { link: consumed[0] };
+
+  // Wrong code (or already locked/consumed): atomically burn one attempt,
+  // still bounded by the cap. Zero rows updated means locked or consumed.
+  const bumped = await db
+    .update(schema.magicLinks)
+    .set({ attempts: sql`${schema.magicLinks.attempts} + 1` })
+    .where(
+      and(eq(schema.magicLinks.id, link.id), isNull(schema.magicLinks.consumedAt), lt(schema.magicLinks.attempts, MAX_VERIFY_ATTEMPTS)),
+    )
+    .returning({ attempts: schema.magicLinks.attempts });
+  if (bumped.length === 0) return { error: "attempts", message: "Too many wrong tries — request a new code." };
+  return { error: "wrong_code", message: "That's not the code we sent — check the newest email." };
 }
 
 export async function verifyByCode(email: string, code: string): Promise<VerifiedSession | { error: string; message: string }> {

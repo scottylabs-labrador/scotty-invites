@@ -38,14 +38,16 @@ async function authFromBearer(header: string | undefined): Promise<McpAuth | nul
   const admin = await findAdminByEmail(row.email);
   if (!admin) return null;
 
+  // Re-derive scope from the LIVE admin row every request, never the snapshot
+  // stored at issuance. If someone is removed and re-added to a narrower
+  // committee, their old token must not resurrect the broader scope.
+  const liveScope = admin.admin.role === "super_admin" ? "all" : admin.admin.committeeId;
+  const scopeName = admin.admin.role === "super_admin" ? "All committees" : admin.committee.name;
+
   if (!row.lastUsedAt || Date.now() - row.lastUsedAt.getTime() > 60_000) {
     void db.update(schema.mcpTokens).set({ lastUsedAt: new Date() }).where(eq(schema.mcpTokens.id, row.id)).execute();
   }
-  const scopeName =
-    row.scope === "all"
-      ? "All committees"
-      : ((await db.select().from(schema.committees).where(eq(schema.committees.id, row.scope)))[0]?.name ?? row.scope);
-  return { email: row.email, scope: row.scope, scopeName };
+  return { email: row.email, scope: liveScope, scopeName };
 }
 
 function text(t: string) {

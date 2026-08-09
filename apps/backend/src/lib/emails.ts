@@ -179,7 +179,7 @@ ${contactLine(opts.ev.contactEmail)}`;
 }
 
 export function plusOneInviteEmail(opts: { ev: EventEmailInfo; hostName: string; url: string }) {
-  const inner = `${h1(`${escapeHtml(opts.hostName)} sent you a +1`)}
+  const inner = `${h1(`${opts.hostName} sent you a +1`)}
 ${p(`You're invited to <b>${escapeHtml(opts.ev.title)}</b> as ${escapeHtml(opts.hostName)}'s +1. Claim the link below with any email — it becomes your own numbered Scotty Invite.`)}
 ${eventBlock(opts.ev)}
 ${button(opts.url, "Claim my Scotty Invite")}
@@ -203,7 +203,7 @@ export function digestEmail(opts: {
   cadence: string;
 }) {
   const capLabel = opts.capacity ? ` of ${opts.capacity}` : "";
-  const inner = `${h1(`${escapeHtml(opts.ev.title)} — ${opts.cadence} digest`)}
+  const inner = `${h1(`${opts.ev.title} — ${opts.cadence} digest`)}
 ${p(`<b>${opts.newSignups}</b> new signup${opts.newSignups === 1 ? "" : "s"} since the last digest · <b>${opts.approved}</b>${capLabel} approved · <b>${opts.waitlist}</b> waitlisted.`)}
 ${opts.pendingCount > 0 ? p(`<b>${opts.pendingCount}</b> request${opts.pendingCount === 1 ? "" : "s"} waiting for review.`) : p("All caught up — nothing waiting for review.")}
 ${button(opts.dashboardUrl, "Open dashboard")}`;
