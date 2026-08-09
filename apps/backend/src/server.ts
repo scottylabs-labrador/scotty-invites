@@ -42,6 +42,37 @@ export async function buildServer(): Promise<FastifyInstance> {
     await app.register(cors, { origin: env.corsOrigins, credentials: true });
   }
 
+  /**
+   * The browse feed and the club calendar are public data that other ScottyLabs
+   * sites render — foundry.scottylabs.org fetches `/api/events` on page load and
+   * filters it to its own committee. Without an Access-Control-Allow-Origin
+   * header the browser refuses to hand the response to their JavaScript, so the
+   * page silently falls back to its "couldn't reach it" state; the request looks
+   * fine in curl, which doesn't enforce CORS. Requiring every consumer to be
+   * added to CORS_ORIGINS first means the feed is broken by default.
+   *
+   * These are anonymous reads. `*` cannot carry cookies — a browser refuses to
+   * send credentials to a wildcard origin — so a cross-origin caller sees
+   * exactly what a signed-out visitor sees, and `myStatus` comes back null.
+   * The credentialed allowlist above still wins where it applies, which is why
+   * this only fills in a header nothing else set.
+   */
+  const PUBLIC_READ = /^\/api\/(events|calendar\.ics|events\/[^/]+\/(calendar\.ics|google-calendar))(\?|$)/;
+  app.addHook("onSend", async (request, reply) => {
+    if (request.method !== "GET" && request.method !== "HEAD") return;
+    if (!PUBLIC_READ.test(request.url)) return;
+    if (reply.getHeader("access-control-allow-origin")) return;
+    reply.header("access-control-allow-origin", "*");
+    // A wildcard origin paired with allow-credentials is rejected outright by
+    // browsers. When CORS_ORIGINS is configured, @fastify/cors stamps
+    // allow-credentials on every response — including ones it declined to give
+    // an origin — so drop it here or this fallback fails exactly where it is
+    // needed most: a public consumer that isn't on the allowlist.
+    reply.removeHeader("access-control-allow-credentials");
+    const vary = reply.getHeader("vary");
+    reply.header("vary", vary ? `${String(vary)}, Origin` : "Origin");
+  });
+
   app.decorateRequest("authCtx", null);
 
   // Session resolution + CSRF origin check for API routes.
