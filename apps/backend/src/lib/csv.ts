@@ -2,8 +2,9 @@ export function toCsv(headers: string[], rows: (string | number | null | undefin
   const escape = (v: string | number | null | undefined): string => {
     if (v === null || v === undefined) return "";
     let s = String(v);
-    // Guard against spreadsheet formula injection.
-    if (/^[=+\-@\t]/.test(s)) s = `'${s}`;
+    // Guard against spreadsheet formula injection (incl. leading CR, which
+    // some spreadsheets treat like a fresh cell start).
+    if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`;
     if (/[",\n\r]/.test(s)) s = `"${s.replace(/"/g, '""')}"`;
     return s;
   };

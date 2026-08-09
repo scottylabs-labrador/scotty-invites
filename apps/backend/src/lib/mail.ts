@@ -41,10 +41,13 @@ export async function sendMail(msg: MailMessage): Promise<{ ok: boolean; detail?
     });
     const body = await res.text();
     if (!res.ok) {
-      console.error(`[mail] mailgun ${res.status} for ${msg.to}: ${body}`);
-      return { ok: false, detail: `${res.status} ${body}` };
+      // Truncate the provider body — it can echo recipient/message content.
+      console.error(`[mail] mailgun ${res.status} for ${msg.to}: ${body.slice(0, 120)}`);
+      return { ok: false, detail: `${res.status}` };
     }
-    console.log(`[mail] sent to=${msg.to} subject="${msg.subject}"`);
+    // Never log the subject — sign-in codes live in the subject line and this
+    // runs in production (Mailgun) mode where logs are broadly readable.
+    console.log(`[mail] sent to=${msg.to}`);
     return { ok: true };
   } catch (err) {
     console.error(`[mail] error sending to ${msg.to}:`, err);

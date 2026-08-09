@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { db, schema } from "./db/client";
 import { env } from "./env";
-import { router, contract, setSessionCookie, deriveLocationShort, inviteCodeMatches, userHoldsTicket } from "./routes/router";
+import { router, contract, setSessionCookie, deriveLocationShort, inviteCodeMatches, userHoldsTicket, inviteAttemptsExceeded, recordInviteFail } from "./routes/router";
 import { resolveSession, verifyByToken, type AuthContext } from "./auth/service";
 import { buildIcs, googleCalendarUrl } from "./lib/ics";
 import { registerOauthRoutes } from "./oauth/routes";
@@ -42,6 +42,37 @@ export async function buildServer(): Promise<FastifyInstance> {
     await app.register(cors, { origin: env.corsOrigins, credentials: true });
   }
 
+  /**
+   * The browse feed and the club calendar are public data that other ScottyLabs
+   * sites render — foundry.scottylabs.org fetches `/api/events` on page load and
+   * filters it to its own committee. Without an Access-Control-Allow-Origin
+   * header the browser refuses to hand the response to their JavaScript, so the
+   * page silently falls back to its "couldn't reach it" state; the request looks
+   * fine in curl, which doesn't enforce CORS. Requiring every consumer to be
+   * added to CORS_ORIGINS first means the feed is broken by default.
+   *
+   * These are anonymous reads. `*` cannot carry cookies — a browser refuses to
+   * send credentials to a wildcard origin — so a cross-origin caller sees
+   * exactly what a signed-out visitor sees, and `myStatus` comes back null.
+   * The credentialed allowlist above still wins where it applies, which is why
+   * this only fills in a header nothing else set.
+   */
+  const PUBLIC_READ = /^\/api\/(events|calendar\.ics|events\/[^/]+\/(calendar\.ics|google-calendar))(\?|$)/;
+  app.addHook("onSend", async (request, reply) => {
+    if (request.method !== "GET" && request.method !== "HEAD") return;
+    if (!PUBLIC_READ.test(request.url)) return;
+    if (reply.getHeader("access-control-allow-origin")) return;
+    reply.header("access-control-allow-origin", "*");
+    // A wildcard origin paired with allow-credentials is rejected outright by
+    // browsers. When CORS_ORIGINS is configured, @fastify/cors stamps
+    // allow-credentials on every response — including ones it declined to give
+    // an origin — so drop it here or this fallback fails exactly where it is
+    // needed most: a public consumer that isn't on the allowlist.
+    reply.removeHeader("access-control-allow-credentials");
+    const vary = reply.getHeader("vary");
+    reply.header("vary", vary ? `${String(vary)}, Origin` : "Origin");
+  });
+
   app.decorateRequest("authCtx", null);
 
   // Session resolution + CSRF origin check for API routes.
@@ -66,16 +97,31 @@ export async function buildServer(): Promise<FastifyInstance> {
     request.authCtx = await resolveSession(request.cookies[SESSION_COOKIE]);
   });
 
-  // Security headers everywhere.
+  // Security headers everywhere. Framing is denied on ALL responses — nothing
+  // in this app is meant to be embedded, and the OAuth consent + magic-link
+  // confirmation pages are served under /api as HTML, so exempting /api would
+  // have left them clickjackable.
   app.addHook("onSend", async (request, reply) => {
     reply.header("X-Content-Type-Options", "nosniff");
     reply.header("Referrer-Policy", "strict-origin-when-cross-origin");
-    if (!request.url.startsWith("/api")) {
-      reply.header("X-Frame-Options", "DENY");
-    }
+    reply.header("X-Frame-Options", "DENY");
+    reply.header("Content-Security-Policy", "frame-ancestors 'none'");
     if (env.isProd) {
       reply.header("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
     }
+  });
+
+  // Global error handler — never let a raw error (e.g. a Postgres exception,
+  // which carries the failing SQL + bound params) reach the client. Log the
+  // full detail server-side; return a generic, safe body.
+  app.setErrorHandler((err, request, reply) => {
+    request.log.error({ err }, "unhandled request error");
+    if ((err as { validation?: unknown }).validation) {
+      return reply.status(400).send({ error: "bad_request", message: "That request was malformed." });
+    }
+    const status = err.statusCode && err.statusCode >= 400 && err.statusCode < 500 ? err.statusCode : 500;
+    if (status < 500) return reply.status(status).send({ error: "request_error", message: err.message });
+    return reply.status(500).send({ error: "internal", message: "Something went wrong on our end." });
   });
 
   // ---------------------------------------------------------------- ts-rest
@@ -147,7 +193,9 @@ export async function buildServer(): Promise<FastifyInstance> {
     return reply.send({ id: inserted[0].id, filename: inserted[0].filename, url: `${env.apiUrl}/api/files/${inserted[0].id}` });
   });
 
-  // Resume download — owner or any admin.
+  // Resume download — owner, super admin, or an admin OF THE COMMITTEE whose
+  // event the resume was submitted to. Committee scoping mirrors every other
+  // guest-data surface; a Tech admin must not read a Foundry applicant's resume.
   app.get("/api/files/:id", async (request, reply) => {
     const ctx = request.authCtx;
     if (!ctx) return reply.status(401).send({ error: "unauthorized", message: "Sign in first." });
@@ -156,9 +204,23 @@ export async function buildServer(): Promise<FastifyInstance> {
     const rows = await db.select().from(schema.files).where(eq(schema.files.id, id));
     const file = rows[0];
     if (!file) return reply.status(404).send({ error: "not_found", message: "No such file." });
-    if (file.ownerUserId !== ctx.user.id && !ctx.admin) {
-      return reply.status(403).send({ error: "forbidden", message: "Not yours to read." });
+
+    let allowed = file.ownerUserId === ctx.user.id;
+    if (!allowed && ctx.admin) {
+      if (ctx.admin.row.role === "super_admin") {
+        allowed = true;
+      } else {
+        // Only if this file is attached to a registration on one of the admin's committee's events.
+        const scoped = await db
+          .select({ committeeId: schema.events.committeeId })
+          .from(schema.registrations)
+          .innerJoin(schema.events, eq(schema.registrations.eventId, schema.events.id))
+          .where(eq(schema.registrations.resumeFileId, id));
+        allowed = scoped.some((r) => r.committeeId === ctx.admin!.row.committeeId);
+      }
     }
+    if (!allowed) return reply.status(403).send({ error: "forbidden", message: "Not yours to read." });
+
     reply.header("Content-Type", file.contentType);
     reply.header("Content-Disposition", `attachment; filename="${file.filename.replace(/[^\w.\- ]/g, "_")}"`);
     return reply.send(file.data);
@@ -295,14 +357,20 @@ export async function buildServer(): Promise<FastifyInstance> {
     const rows = await db.select().from(schema.events).where(eq(schema.events.shortCode, code));
     const e = rows[0];
     if (!e || e.status !== "published") return reply.status(404).send({ error: "not_found", message: "Event not found" });
-    // Unlisted (invite-only) events don't leak details without the code.
+    // Unlisted (invite-only) events don't leak details without the code, and
+    // guessing is throttled here too so the calendar route isn't a code oracle.
     const supplied = (request.query as { code?: string }).code;
     // A guest holding a pass (including a claimed +1, which has no registration
     // of its own) has already proved entitlement and shouldn't need the code
-    // again just to add the event to their calendar.
+    // again just to add the event to their calendar. The attempt cap still
+    // guards the code path itself, so a holder is never rate-limited out of
+    // their own event.
     const holder = request.authCtx ? await userHoldsTicket(e.id, request.authCtx.user.id) : false;
-    if (!e.listed && !inviteCodeMatches(e, supplied) && !request.authCtx?.admin && !holder) {
-      return reply.status(404).send({ error: "not_found", message: "Event not found" });
+    if (!e.listed && !request.authCtx?.admin && !holder) {
+      if (inviteAttemptsExceeded(request.ip, e.id) || !inviteCodeMatches(e, supplied)) {
+        if (supplied && !inviteCodeMatches(e, supplied)) recordInviteFail(request.ip, e.id);
+        return reply.status(404).send({ error: "not_found", message: "Event not found" });
+      }
     }
     const ics = buildIcs(
       [
@@ -331,10 +399,15 @@ export async function buildServer(): Promise<FastifyInstance> {
     const supplied = (request.query as { code?: string }).code;
     // A guest holding a pass (including a claimed +1, which has no registration
     // of its own) has already proved entitlement and shouldn't need the code
-    // again just to add the event to their calendar.
+    // again just to add the event to their calendar. The attempt cap still
+    // guards the code path itself, so a holder is never rate-limited out of
+    // their own event.
     const holder = request.authCtx ? await userHoldsTicket(e.id, request.authCtx.user.id) : false;
-    if (!e.listed && !inviteCodeMatches(e, supplied) && !request.authCtx?.admin && !holder) {
-      return reply.status(404).send({ error: "not_found", message: "Event not found" });
+    if (!e.listed && !request.authCtx?.admin && !holder) {
+      if (inviteAttemptsExceeded(request.ip, e.id) || !inviteCodeMatches(e, supplied)) {
+        if (supplied && !inviteCodeMatches(e, supplied)) recordInviteFail(request.ip, e.id);
+        return reply.status(404).send({ error: "not_found", message: "Event not found" });
+      }
     }
     return reply.redirect(
       googleCalendarUrl({
