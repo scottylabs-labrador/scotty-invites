@@ -66,7 +66,8 @@ async function transferTokenValid(token: string): Promise<boolean> {
 export type StartResult =
   | { ok: true }
   | { ok: false; error: "domain"; message: string }
-  | { ok: false; error: "rate_limited"; message: string };
+  | { ok: false; error: "rate_limited"; message: string }
+  | { ok: false; error: "mail_failed"; message: string };
 
 export async function startAuth(opts: {
   email: string;
@@ -107,18 +108,31 @@ export async function startAuth(opts: {
 
   const token = newToken();
   const code = newSixDigitCode();
-  await db.insert(schema.magicLinks).values({
-    email,
-    tokenHash: sha256(token),
-    codeHash: sha256(code),
-    keepSignedIn: opts.keepSignedIn,
-    expiresAt: new Date(Date.now() + MAGIC_LINK_TTL_MS),
-    ip: opts.ip,
-  });
+  const inserted = await db
+    .insert(schema.magicLinks)
+    .values({
+      email,
+      tokenHash: sha256(token),
+      codeHash: sha256(code),
+      keepSignedIn: opts.keepSignedIn,
+      expiresAt: new Date(Date.now() + MAGIC_LINK_TTL_MS),
+      ip: opts.ip,
+    })
+    .returning({ id: schema.magicLinks.id });
 
   const link = `${env.apiUrl}/api/auth/callback?token=${encodeURIComponent(token)}`;
   const mail = signInEmail({ link, code });
-  await sendMail({ to: email, ...mail });
+  const sent = await sendMail({ to: email, ...mail });
+  if (!sent.ok) {
+    // Remove the never-delivered link: consumeCode only checks the newest row
+    // for this email, so leaving it would shadow a code the user already has.
+    await db.delete(schema.magicLinks).where(eq(schema.magicLinks.id, inserted[0].id));
+    return {
+      ok: false,
+      error: "mail_failed",
+      message: "We couldn't send the email. Wait a minute and try again.",
+    };
+  }
   return { ok: true };
 }
 
