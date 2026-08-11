@@ -515,7 +515,7 @@ export const contract = c.router(
           keepSignedIn: z.boolean().optional(),
           transferToken: z.string().max(128).optional(),
         }),
-        responses: { 200: z.object({ ok: z.literal(true) }), 400: ErrorBody, 429: ErrorBody },
+        responses: { 200: z.object({ ok: z.literal(true) }), 400: ErrorBody, 429: ErrorBody, 502: ErrorBody },
         summary: "Start email verification (magic link + 6-digit code via Mailgun)",
       },
       verify: {

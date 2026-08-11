@@ -233,6 +233,7 @@ export const router = s.router(contract, {
       });
       if (result.ok) return { status: 200, body: { ok: true } };
       if (result.error === "rate_limited") return { status: 429, body: { error: result.error, message: result.message } };
+      if (result.error === "mail_failed") return { status: 502, body: { error: result.error, message: result.message } };
       return { status: 400, body: { error: result.error, message: result.message } };
     },
 
