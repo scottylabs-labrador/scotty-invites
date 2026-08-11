@@ -252,6 +252,18 @@ function DashboardBody({
         </div>
       </div>
 
+      <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", fontFamily: "var(--font-ui)" }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--muted-2)" }}>Attendance across events</span>
+        <a href="/api/org/attendance.csv?shape=people" className="pill pill-outline" style={{ fontSize: 12, padding: "7px 16px" }}>
+          <DownloadIcon size={13} />
+          People CSV
+        </a>
+        <a href="/api/org/attendance.csv?shape=long" className="pill pill-outline" style={{ fontSize: 12, padding: "7px 16px" }}>
+          <DownloadIcon size={13} />
+          Full history CSV
+        </a>
+      </div>
+
       {/* KPI cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 16, marginTop: 24, fontFamily: "var(--font-ui)" }}>
         <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, padding: "18px 20px", boxShadow: "var(--shadow-sm)" }}>
