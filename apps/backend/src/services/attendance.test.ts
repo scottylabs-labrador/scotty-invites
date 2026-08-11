@@ -129,3 +129,48 @@ describe("attendanceLong", () => {
     expect(rows.some((r) => r.eventTitle.startsWith(`PastB ${f.tag}`))).toBe(true);
   });
 });
+
+describe("attendancePeople", () => {
+  it("rolls up counts, rate, and first/last attended per person", async () => {
+    const f = await seedFixture();
+    const people = await attendancePeople({ committeeId: f.comA.id });
+    const alice = people.find((p) => p.email === f.alice.email);
+    const bob = people.find((p) => p.email === f.bob.email);
+
+    // Alice: pastA attended + futureA upcoming → 2 signed up, 1 attended, 0 no-shows, rate 1.00
+    expect(alice).toMatchObject({ eventsSignedUp: 2, eventsAttended: 1, noShows: 0, plusOnesBrought: 1, attendanceRate: "1.00" });
+    expect(alice?.firstAttendedAt).not.toBe("");
+    expect(alice?.firstAttendedAt).toBe(alice?.lastAttendedAt);
+
+    // Bob in comA: pastA no-show + cancelled ticket → 2 signed up, 0 attended, 1 no-show, rate 0.00
+    expect(bob).toMatchObject({ eventsSignedUp: 2, eventsAttended: 0, noShows: 1, attendanceRate: "0.00" });
+
+    // Carol only had a revoked ticket → absent entirely
+    expect(people.find((p) => p.email === f.carol.email)).toBeUndefined();
+  });
+
+  it("scopes to the committee (Bob's PastB attendance only appears unscoped)", async () => {
+    const f = await seedFixture();
+    const scoped = await attendancePeople({ committeeId: f.comA.id });
+    expect(scoped.find((p) => p.email === f.bob.email)?.eventsAttended).toBe(0);
+    const all = await attendancePeople({ committeeId: null });
+    expect((all.find((p) => p.email === f.bob.email)?.eventsAttended ?? 0) >= 1).toBe(true);
+  });
+
+  it("gives someone with no finished events an empty attendance rate", async () => {
+    const f = await seedFixture();
+    const people = await attendancePeople({ committeeId: f.comA.id });
+    // Guest attended (rate defined); construct the empty case from Alice-future only:
+    // a person whose only ticket is upcoming — seed inline here.
+    const [dana] = await db.insert(schema.users)
+      .values({ email: `att-dana-${f.tag}@andrew.cmu.edu`, name: "Dana D", andrewId: `dana${f.tag.slice(-4)}` }).returning();
+    await db.insert(schema.tickets).values({
+      eventId: f.futureA.id, userId: dana.id, number: 999999, serial: `ATT-${f.tag}-D`, kind: "primary",
+    });
+    const after = await attendancePeople({ committeeId: f.comA.id });
+    expect(after.find((p) => p.email === dana.email)).toMatchObject({
+      eventsSignedUp: 1, eventsAttended: 0, noShows: 0, attendanceRate: "",
+    });
+    void people;
+  });
+});

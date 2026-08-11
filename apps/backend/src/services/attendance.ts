@@ -138,8 +138,65 @@ export async function attendanceLong(scope: AttendanceScope): Promise<LongRow[]>
   return rows;
 }
 
-// Implemented in Task 2 — stub keeps Task 1's test file compiling.
-export async function attendancePeople(scope: AttendanceScope): Promise<never[]> {
-  void scope;
-  return [];
+export interface PersonRow {
+  name: string; andrewId: string; email: string;
+  eventsSignedUp: number; eventsAttended: number; noShows: number; plusOnesBrought: number;
+  firstAttendedAt: string; lastAttendedAt: string; attendanceRate: string;
+}
+
+export async function attendancePeople(scope: AttendanceScope): Promise<PersonRow[]> {
+  const base = await fetchBase(scope);
+  const now = Date.now();
+  const eventById = new Map(base.events.map((e) => [e.id, e]));
+
+  interface Acc { signedUp: number; attended: number; noShows: number; plusOnes: number; first: Date | null; last: Date | null }
+  const acc = new Map<string, Acc>();
+  const get = (userId: string): Acc => {
+    let a = acc.get(userId);
+    if (!a) { a = { signedUp: 0, attended: 0, noShows: 0, plusOnes: 0, first: null, last: null }; acc.set(userId, a); }
+    return a;
+  };
+
+  for (const t of base.tickets) {
+    if (t.revokedAt) continue;
+    const event = eventById.get(t.eventId);
+    if (!event) continue;
+    const ok = base.firstOkByTicket.get(t.id);
+    const status = ticketStatus(event, !!ok, now);
+    const a = get(t.userId);
+    a.signedUp += 1;
+    if (status === "attended") {
+      a.attended += 1;
+      const at = ok!.createdAt;
+      if (!a.first || at < a.first) a.first = at;
+      if (!a.last || at > a.last) a.last = at;
+      if (t.kind === "plus_one" && t.parentTicketId) {
+        const host = base.ticketById.get(t.parentTicketId);
+        if (host) get(host.userId).plusOnes += 1;
+      }
+    } else if (status === "no_show") {
+      a.noShows += 1;
+    }
+  }
+
+  const rows: PersonRow[] = [];
+  for (const [userId, a] of acc) {
+    const u = base.userById.get(userId);
+    if (!u) continue;
+    const denom = a.attended + a.noShows;
+    rows.push({
+      name: displayName(u),
+      andrewId: u.andrewId ?? "",
+      email: u.email,
+      eventsSignedUp: a.signedUp,
+      eventsAttended: a.attended,
+      noShows: a.noShows,
+      plusOnesBrought: a.plusOnes,
+      firstAttendedAt: iso(a.first),
+      lastAttendedAt: iso(a.last),
+      attendanceRate: denom === 0 ? "" : (a.attended / denom).toFixed(2),
+    });
+  }
+  rows.sort((a, b) => a.email.localeCompare(b.email));
+  return rows;
 }
