@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { db, schema } from "./db/client";
 import { env } from "./env";
-import { router, contract, setSessionCookie, deriveLocationShort, inviteCodeMatches, userHoldsTicket, inviteAttemptsExceeded, recordInviteFail } from "./routes/router";
+import { router, contract, setSessionCookie, deriveLocationShort, inviteCodeMatches, userHoldsTicket, inviteAttemptsExceeded, recordInviteFail, isUuid } from "./routes/router";
 import { resolveSession, verifyByToken, type AuthContext } from "./auth/service";
 import { buildIcs, googleCalendarUrl } from "./lib/ics";
 import { registerOauthRoutes } from "./oauth/routes";
@@ -326,11 +326,22 @@ export async function buildServer(): Promise<FastifyInstance> {
     if (q.shape !== "people" && q.shape !== "long") {
       return reply.status(400).send({ error: "bad_shape", message: "shape must be people or long" });
     }
-    const committeeId =
-      ctx.admin.row.role === "super_admin" ? (q.committee ?? null) : ctx.admin.row.committeeId;
 
     reply.header("Content-Type", "text/csv; charset=utf-8");
     reply.header("Content-Disposition", `attachment; filename="attendance-${q.shape}.csv"`);
+
+    // Guard against invalid committee filter for super_admin: if present but not a valid UUID string, return empty CSV.
+    if (ctx.admin.row.role === "super_admin" && q.committee !== undefined) {
+      if (typeof q.committee !== "string" || !isUuid(q.committee)) {
+        const emptyHeaders = q.shape === "people"
+          ? ["Name", "Andrew ID", "Email", "Events signed up", "Events attended", "No-shows", "Plus-ones brought", "First attended", "Last attended", "Attendance rate"]
+          : ["Event", "Date", "Event status", "Committee", "Name", "Andrew ID", "Email", "Status", "Check-in method", "Checked in at", "Plus one", "Host", "Source"];
+        return reply.send(toCsv(emptyHeaders, []));
+      }
+    }
+
+    const committeeId =
+      ctx.admin.row.role === "super_admin" ? (q.committee ?? null) : ctx.admin.row.committeeId;
 
     if (q.shape === "people") {
       const rows = await attendancePeople({ committeeId });
