@@ -16,6 +16,7 @@ import { buildIcs, googleCalendarUrl } from "./lib/ics";
 import { registerOauthRoutes } from "./oauth/routes";
 import { toCsv } from "./lib/csv";
 import { buildPkpass } from "./lib/wallet/apple";
+import { attendanceLong, attendancePeople } from "./services/attendance";
 
 declare module "fastify" {
   interface FastifyRequest {
@@ -315,6 +316,34 @@ export async function buildServer(): Promise<FastifyInstance> {
       `attachment; filename="${event.title.replace(/[^\w.\- ]/g, "_").slice(0, 60)} guests.csv"`,
     );
     return reply.send(toCsv(headers, rows));
+  });
+
+  // Cross-event attendance CSV — committee-scoped, two shapes (people | long).
+  app.get("/api/org/attendance.csv", async (request, reply) => {
+    const ctx = request.authCtx;
+    if (!ctx?.admin) return reply.status(401).send({ error: "unauthorized", message: "Organizers only." });
+    const q = request.query as { shape?: string; committee?: string };
+    if (q.shape !== "people" && q.shape !== "long") {
+      return reply.status(400).send({ error: "bad_shape", message: "shape must be people or long" });
+    }
+    const committeeId =
+      ctx.admin.row.role === "super_admin" ? (q.committee ?? null) : ctx.admin.row.committeeId;
+
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="attendance-${q.shape}.csv"`);
+
+    if (q.shape === "people") {
+      const rows = await attendancePeople({ committeeId });
+      return reply.send(toCsv(
+        ["Name", "Andrew ID", "Email", "Events signed up", "Events attended", "No-shows", "Plus-ones brought", "First attended", "Last attended", "Attendance rate"],
+        rows.map((p) => [p.name, p.andrewId, p.email, p.eventsSignedUp, p.eventsAttended, p.noShows, p.plusOnesBrought, p.firstAttendedAt, p.lastAttendedAt, p.attendanceRate]),
+      ));
+    }
+    const rows = await attendanceLong({ committeeId });
+    return reply.send(toCsv(
+      ["Event", "Date", "Event status", "Committee", "Name", "Andrew ID", "Email", "Status", "Check-in method", "Checked in at", "Plus one", "Host", "Source"],
+      rows.map((r) => [r.eventTitle, r.eventDate, r.eventStatus, r.committee, r.name, r.andrewId, r.email, r.status, r.checkinMethod, r.checkedInAt, r.plusOne ? "yes" : "no", r.hostName, r.source]),
+    ));
   });
 
   // Apple Wallet pass.
