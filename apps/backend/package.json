@@ -9,7 +9,7 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
-    "test": "vitest run"
+    "test": "pnpm db:migrate && vitest run"
   },
   "dependencies": {
     "@fastify/cookie": "^9.4.0",

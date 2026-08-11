@@ -130,7 +130,7 @@ export async function startAuth(opts: {
     return {
       ok: false,
       error: "mail_failed",
-      message: "We couldn't send the email — the mail service rejected it. Wait a minute and try again.",
+      message: "We couldn't send the email. Wait a minute and try again.",
     };
   }
   return { ok: true };

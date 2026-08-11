@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-// These tests hit the real service against the local dev Postgres
-// (embedded-postgres on 5433, schema already migrated by a dev boot).
+// These tests hit the real service against the local dev Postgres on 5433
+// (the test script runs db:migrate first; starting Postgres itself is
+// environment-specific — see the README's Docker recipe).
 // Only the outbound Mailgun HTTP call is stubbed — everything else is real.
 const TEST_ENV = {
   DATABASE_URL: "postgres://postgres:postgres@localhost:5433/scottylabs_invites",
