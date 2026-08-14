@@ -234,3 +234,150 @@ describe("POST /api/events/:code/register — answer validation", () => {
     }
   });
 });
+
+describe("POST /api/events/:code/register — the four standard values", () => {
+  it("stores nothing for a standard field this event does not ask for", async () => {
+    const committee = await makeCommittee();
+    const organizer = await makeUser({ admin: { committeeId: committee.id } });
+    const event = await publish(organizer.cookie, committee.id, {
+      // Every capture off: the rows exist but are invisible.
+      captures: { major_year: false, dietary: false, resume: false, source: false, phone: false, tshirt: false },
+    });
+    const guest = await makeUser();
+    const own = (
+      await db
+        .insert(schema.files)
+        .values({
+          ownerUserId: guest.user.id,
+          kind: "resume",
+          filename: "cv.pdf",
+          contentType: "application/pdf",
+          size: 3,
+          data: Buffer.from("pdf"),
+        })
+        .returning()
+    )[0];
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/events/${event.shortCode}/register`,
+      headers: { cookie: guest.cookie },
+      payload: {
+        fullName: "Jane Tartan",
+        major: "Computer Science",
+        classYear: "2027",
+        dietary: ["Vegan"],
+        resumeFileId: own.id,
+        source: "Slack",
+      },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const { registrationId } = res.json() as { registrationId: string };
+    const row = (await db.select().from(schema.registrations).where(eq(schema.registrations.id, registrationId)))[0];
+    expect(row.major).toBeNull();
+    expect(row.classYear).toBeNull();
+    expect(row.dietary).toEqual([]);
+    expect(row.resumeFileId).toBeNull();
+    expect(row.source).toBeNull();
+  });
+
+  it("stores them when the event does ask", async () => {
+    const committee = await makeCommittee();
+    const organizer = await makeUser({ admin: { committeeId: committee.id } });
+    const event = await publish(organizer.cookie, committee.id, {
+      captures: { major_year: true, dietary: true, resume: false, source: true, phone: false, tshirt: false },
+    });
+    const guest = await makeUser();
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/events/${event.shortCode}/register`,
+      headers: { cookie: guest.cookie },
+      payload: { fullName: "Jane Tartan", major: "Computer Science", classYear: "2027", dietary: ["Vegan"], source: "Slack" },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const { registrationId } = res.json() as { registrationId: string };
+    const row = (await db.select().from(schema.registrations).where(eq(schema.registrations.id, registrationId)))[0];
+    expect(row.major).toBe("Computer Science");
+    expect(row.dietary).toEqual(["Vegan"]);
+    expect(row.source).toBe("Slack");
+  });
+
+  // The two cases above never actually exercise the `controls[key] &&` half of
+  // the gate, because createEvent bakes `visible: controls[key] && captures[key]`
+  // into the row at publish time — so a gate that checked only row presence
+  // (ignoring `controls` entirely) would already pass both. This proves the
+  // global-control half is live at register time too, not just baked into the
+  // row: the row stays visible from when the control was on; only the control
+  // itself flips afterward.
+  it("still blocks the value when a super admin turns the global control off after the event's row was already made visible", async () => {
+    const before = await setControlsReturningPrevious({ major_year: true });
+    try {
+      const committee = await makeCommittee();
+      const organizer = await makeUser({ admin: { committeeId: committee.id } });
+      const event = await publish(organizer.cookie, committee.id, {
+        captures: { major_year: true, dietary: false, resume: false, source: false, phone: false, tshirt: false },
+      });
+      const majorYear = event.questions.find((q) => q.key === "major_year")!;
+      expect(majorYear.visible).toBe(true);
+
+      // Flip the global control off. The event's own row is untouched.
+      await setControlsReturningPrevious({ major_year: false });
+
+      const guest = await makeUser();
+      const res = await app.inject({
+        method: "POST",
+        url: `/api/events/${event.shortCode}/register`,
+        headers: { cookie: guest.cookie },
+        payload: { fullName: "Jane Tartan", major: "Computer Science", classYear: "2027" },
+      });
+      expect(res.statusCode).toBe(200);
+
+      const { registrationId } = res.json() as { registrationId: string };
+      const row = (await db.select().from(schema.registrations).where(eq(schema.registrations.id, registrationId)))[0];
+      expect(row.major).toBeNull();
+      expect(row.classYear).toBeNull();
+    } finally {
+      await setControlsReturningPrevious({ major_year: before.major_year });
+    }
+  });
+
+  // The two cases above never store a resume file id on the positive path
+  // either (both leave `resume` off). Cover it explicitly so "both on" is
+  // proven for all four fields, not just three of them.
+  it("stores the resume file id when the event does ask and the global control allows it", async () => {
+    const committee = await makeCommittee();
+    const organizer = await makeUser({ admin: { committeeId: committee.id } });
+    const event = await publish(organizer.cookie, committee.id, {
+      captures: { major_year: false, dietary: false, resume: true, source: false, phone: false, tshirt: false },
+    });
+    const guest = await makeUser();
+    const own = (
+      await db
+        .insert(schema.files)
+        .values({
+          ownerUserId: guest.user.id,
+          kind: "resume",
+          filename: "cv.pdf",
+          contentType: "application/pdf",
+          size: 3,
+          data: Buffer.from("pdf"),
+        })
+        .returning()
+    )[0];
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/events/${event.shortCode}/register`,
+      headers: { cookie: guest.cookie },
+      payload: { fullName: "Jane Tartan", resumeFileId: own.id },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const { registrationId } = res.json() as { registrationId: string };
+    const row = (await db.select().from(schema.registrations).where(eq(schema.registrations.id, registrationId)))[0];
+    expect(row.resumeFileId).toBe(own.id);
+  });
+});

@@ -563,15 +563,27 @@ export const router = s.router(contract, {
 
       await db.update(schema.users).set({ name: body.fullName }).where(eq(schema.users.id, ctx.user.id));
 
+      /**
+       * The global controls say what the club collects at all; the event's own
+       * question rows say what THIS event collects. A value has to clear both, or
+       * an organizer's "hide Resume upload" toggle would stop the field rendering
+       * while the server carried on storing resume_file_id — a switch labelled
+       * hide that keeps collecting. `questions` is already filtered to visible
+       * rows, so presence is the test.
+       */
+      const asks = (key: keyof QuestionControls) => controls[key] && questions.some((q) => q.key === key);
+
       const outcome = await createRegistration({
         event,
         user: ctx.user,
         fullName: body.fullName,
-        major: controls.major_year ? (body.major ?? null) : null,
-        classYear: controls.major_year ? (body.classYear ?? null) : null,
-        dietary: controls.dietary ? (body.dietary ?? []) : [],
-        resumeFileId: controls.resume ? (body.resumeFileId ?? null) : null,
-        source: controls.source ? (body.source ?? null) : null,
+        major: asks("major_year") ? (body.major ?? null) : null,
+        classYear: asks("major_year") ? (body.classYear ?? null) : null,
+        dietary: asks("dietary") ? (body.dietary ?? []) : [],
+        // Lower-cased for the same reason file answers are: the organizer's
+        // download link has to match a route that only accepts lower-case ids.
+        resumeFileId: asks("resume") ? (body.resumeFileId?.toLowerCase() ?? null) : null,
+        source: asks("source") ? (body.source ?? null) : null,
         plusOne: body.plusOne ?? false,
         customAnswers,
       });
