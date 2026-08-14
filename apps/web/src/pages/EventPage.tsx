@@ -109,17 +109,27 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
   const [resume, setResume] = useState<{ id: string; filename: string } | null>(null);
   const [source, setSource] = useState<string>(SOURCE_OPTIONS[0]);
   const [plusOne, setPlusOne] = useState(false);
-  const [custom, setCustom] = useState<Record<string, string>>({});
+  /** Keyed by question id. `filename` is display-only — a file answer sends `value`, the file's UUID. */
+  const [custom, setCustom] = useState<Record<string, { value: string; filename?: string }>>({});
+  /** Per-question upload spinners. One shared flag would disable every uploader at once. */
+  const [uploads, setUploads] = useState<Record<string, boolean>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [copied, setCopied] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
+  const answerInputs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const showMajorYear = detail.questions.some((q) => q.key === "major_year");
   const showDietary = detail.questions.some((q) => q.key === "dietary");
   const showResume = detail.questions.some((q) => q.key === "resume");
   const showSource = detail.questions.some((q) => q.key === "source");
-  const customQuestions = detail.questions.filter((q) => q.kind === "custom");
+  /**
+   * Everything that submits through RegisterBody.custom: host questions plus the
+   * two standard keys the backend accepts there. major_year / dietary / resume /
+   * source keep their bespoke widgets and their own top-level body fields.
+   */
+  const answerable = detail.questions.filter((q) => q.kind === "custom" || q.key === "phone" || q.key === "tshirt");
 
   const registerMutation = useMutation({
     mutationFn: async () => {
@@ -133,7 +143,7 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
           resumeFileId: resume?.id,
           source: showSource ? source : undefined,
           plusOne: detail.allowPlusOne ? plusOne : undefined,
-          custom: customQuestions.map((q) => ({ questionId: q.id, value: custom[q.id] ?? "" })).filter((a) => a.value.trim()),
+          custom: answerable.map((q) => ({ questionId: q.id, value: custom[q.id]?.value ?? "" })).filter((a) => a.value.trim()),
           inviteCode: inviteCode || undefined,
         },
       });
@@ -147,21 +157,48 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
     onError: (e: Error) => setError(e.message),
   });
 
+  /** The one upload path. `kind` tells the server whether this is the resume or an answer. */
+  async function uploadFile(file: File, kind: "resume" | "answer"): Promise<{ id: string; filename: string }> {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`/api/files?kind=${kind}`, { method: "POST", body: form, credentials: "include" });
+    const body = (await res.json()) as { id?: string; filename?: string; message?: string };
+    if (!res.ok || !body.id) throw new Error(body.message ?? "Upload failed");
+    return { id: body.id, filename: body.filename ?? file.name };
+  }
+
   async function uploadResume(file: File) {
     setUploading(true);
     setError(null);
     try {
-      const form = new FormData();
-      form.append("file", file);
-      const res = await fetch("/api/files", { method: "POST", body: form, credentials: "include" });
-      const body = (await res.json()) as { id?: string; filename?: string; message?: string };
-      if (!res.ok || !body.id) throw new Error(body.message ?? "Upload failed");
-      setResume({ id: body.id, filename: body.filename ?? file.name });
+      setResume(await uploadFile(file, "resume"));
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setUploading(false);
     }
+  }
+
+  /**
+   * `required` applies only to the questions that travel through `custom`. The
+   * four bespoke standards are excluded deliberately and the builder never offers
+   * a Required toggle for them: major, class year and source are pre-selected to
+   * non-empty defaults so "required" is unobservable, and "no dietary
+   * restrictions" is a legitimate empty answer. The server draws the same line.
+   */
+  function validateAnswers(): boolean {
+    const errs: Record<string, string> = {};
+    for (const q of answerable) {
+      if (!q.required) continue;
+      if (!(custom[q.id]?.value ?? "").trim()) errs[q.id] = "This one's required.";
+    }
+    setFieldErrors(errs);
+    const first = answerable.find((q) => errs[q.id]);
+    if (first) {
+      setError(`“${first.label}” is required.`);
+      return false;
+    }
+    return true;
   }
 
   function copyEventLink() {
@@ -348,113 +385,226 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
                     </span>
                   </div>
                 </label>
-                {showMajorYear && (
-                  <>
-                    <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <span className="field-label">Major</span>
-                      <select className="input" value={major} onChange={(e) => setMajor(e.target.value)}>
-                        {MAJOR_OPTIONS.map((m) => (
-                          <option key={m}>{m}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      <span className="field-label">Class year</span>
-                      <select className="input" value={classYear} onChange={(e) => setClassYear(e.target.value)}>
-                        {CLASS_YEAR_OPTIONS.map((y) => (
-                          <option key={y}>{y}</option>
-                        ))}
-                      </select>
-                    </label>
-                  </>
-                )}
               </div>
 
-              {showDietary && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <span className="field-label">Dietary restrictions</span>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                    {DIETARY_OPTIONS.map((dt) => {
-                      const on = diets.includes(dt);
-                      return (
-                        <button
-                          key={dt}
-                          className={`diet-chip ${on ? "diet-chip-on" : "diet-chip-off"}`}
-                          onClick={() => setDiets(on ? diets.filter((x) => x !== dt) : [...diets, dt])}
-                        >
-                          {dt}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+              {/*
+                One loop, in the server's sort order. The four bespoke keys keep
+                their own widgets because their UI (two dropdowns, chips, an
+                uploader) is not expressible as a generic type, and because their
+                stored `type` is unreliable — `resume` is seeded as "short" and
+                three of them are "select" with null options. Everything else is
+                routed by `type`.
+              */}
+              {detail.questions.map((q) => {
+                if (q.key === "major_year") {
+                  return (
+                    <div key={q.id} style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
+                      <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <span className="field-label">Major</span>
+                        <select className="input" value={major} onChange={(e) => setMajor(e.target.value)}>
+                          {MAJOR_OPTIONS.map((m) => (
+                            <option key={m}>{m}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <span className="field-label">Class year</span>
+                        <select className="input" value={classYear} onChange={(e) => setClassYear(e.target.value)}>
+                          {CLASS_YEAR_OPTIONS.map((y) => (
+                            <option key={y}>{y}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  );
+                }
 
-              {showResume && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <span className="field-label">
-                    Resume <span style={{ fontWeight: 400, color: "var(--muted-3)" }}>— optional, shared with {detail.committee.name} mentors only</span>
-                  </span>
-                  {!resume ? (
-                    <>
-                      <button className="dropzone" disabled={uploading} onClick={() => fileInput.current?.click()}>
-                        <UploadIcon size={16} />
-                        {uploading ? "Uploading…" : "Drop your resume here, or click to browse"}
-                      </button>
-                      <input
-                        ref={fileInput}
-                        type="file"
-                        accept=".pdf,.doc,.docx,application/pdf"
-                        style={{ display: "none" }}
+                if (q.key === "dietary") {
+                  return (
+                    <div key={q.id} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <span className="field-label">Dietary restrictions</span>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {DIETARY_OPTIONS.map((dt) => {
+                          const on = diets.includes(dt);
+                          return (
+                            <button
+                              key={dt}
+                              className={`diet-chip ${on ? "diet-chip-on" : "diet-chip-off"}`}
+                              onClick={() => setDiets(on ? diets.filter((x) => x !== dt) : [...diets, dt])}
+                            >
+                              {dt}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (q.key === "resume") {
+                  return (
+                    <div key={q.id} style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      <span className="field-label">
+                        Resume <span style={{ fontWeight: 400, color: "var(--muted-3)" }}>— optional, shared with {detail.committee.name} mentors only</span>
+                      </span>
+                      {!resume ? (
+                        <>
+                          <button className="dropzone" disabled={uploading} onClick={() => fileInput.current?.click()}>
+                            <UploadIcon size={16} />
+                            {uploading ? "Uploading…" : "Drop your resume here, or click to browse"}
+                          </button>
+                          <input
+                            ref={fileInput}
+                            type="file"
+                            accept=".pdf,.doc,.docx,application/pdf"
+                            style={{ display: "none" }}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              if (f) void uploadResume(f);
+                              e.target.value = "";
+                            }}
+                          />
+                        </>
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, border: "1px solid var(--success-border)", background: "var(--success-bg)", borderRadius: 8, padding: "12px 14px", fontSize: 13, color: "var(--success-text)" }}>
+                          <CheckIcon size={15} style={{ color: "var(--success)" }} />
+                          {resume.filename}
+                          <button className="quiet-link" style={{ marginLeft: "auto" }} onClick={() => setResume(null)}>
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (q.key === "source") {
+                  return (
+                    <label key={q.id} style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 280 }}>
+                      <span className="field-label">How did you hear about this?</span>
+                      <select className="input" value={source} onChange={(e) => setSource(e.target.value)}>
+                        {SOURCE_OPTIONS.map((s) => (
+                          <option key={s}>{s}</option>
+                        ))}
+                      </select>
+                    </label>
+                  );
+                }
+
+                const answer = custom[q.id];
+                const err = fieldErrors[q.id];
+                const cls = `input${err ? " input-error" : ""}`;
+                const setValue = (value: string) => setCustom({ ...custom, [q.id]: { value } });
+                const clearError = () =>
+                  setFieldErrors((cur) => {
+                    if (!cur[q.id]) return cur;
+                    const next = { ...cur };
+                    delete next[q.id];
+                    return next;
+                  });
+
+                return (
+                  <label key={q.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    <span className="field-label">
+                      {q.label}
+                      {q.required && <span style={{ color: "var(--danger)" }}> *</span>}
+                      {q.kind === "custom" && <span style={{ fontWeight: 400, color: "var(--muted-3)" }}> — host question</span>}
+                    </span>
+
+                    {q.type === "long" ? (
+                      <textarea
+                        className={cls}
+                        rows={2}
+                        placeholder="A sentence or two is plenty"
+                        value={answer?.value ?? ""}
                         onChange={(e) => {
-                          const f = e.target.files?.[0];
-                          if (f) void uploadResume(f);
-                          e.target.value = "";
+                          clearError();
+                          setValue(e.target.value);
                         }}
                       />
-                    </>
-                  ) : (
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, border: "1px solid var(--success-border)", background: "var(--success-bg)", borderRadius: 8, padding: "12px 14px", fontSize: 13, color: "var(--success-text)" }}>
-                      <CheckIcon size={15} style={{ color: "var(--success)" }} />
-                      {resume.filename}
-                      <button className="quiet-link" style={{ marginLeft: "auto" }} onClick={() => setResume(null)}>
-                        Remove
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
+                    ) : q.type === "select" && q.options?.length ? (
+                      <select
+                        className={cls}
+                        value={answer?.value ?? ""}
+                        onChange={(e) => {
+                          clearError();
+                          setValue(e.target.value);
+                        }}
+                      >
+                        <option value="">Choose…</option>
+                        {q.options.map((o) => (
+                          <option key={o}>{o}</option>
+                        ))}
+                      </select>
+                    ) : q.type === "file" ? (
+                      !answer?.value ? (
+                        <>
+                          <button className="dropzone" disabled={!!uploads[q.id]} onClick={() => answerInputs.current[q.id]?.click()}>
+                            <UploadIcon size={16} />
+                            {uploads[q.id] ? "Uploading…" : "PDF or Word document, up to 5 MB"}
+                          </button>
+                          <input
+                            ref={(el) => {
+                              answerInputs.current[q.id] = el;
+                            }}
+                            type="file"
+                            accept=".pdf,.doc,.docx,application/pdf"
+                            style={{ display: "none" }}
+                            onChange={async (e) => {
+                              const f = e.target.files?.[0];
+                              e.target.value = "";
+                              if (!f) return;
+                              clearError();
+                              setUploads((u) => ({ ...u, [q.id]: true }));
+                              try {
+                                const up = await uploadFile(f, "answer");
+                                setCustom((c) => ({ ...c, [q.id]: { value: up.id, filename: up.filename } }));
+                              } catch (uploadError) {
+                                setFieldErrors((fe) => ({ ...fe, [q.id]: (uploadError as Error).message }));
+                              } finally {
+                                setUploads((u) => ({ ...u, [q.id]: false }));
+                              }
+                            }}
+                          />
+                        </>
+                      ) : (
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, border: "1px solid var(--success-border)", background: "var(--success-bg)", borderRadius: 8, padding: "12px 14px", fontSize: 13, color: "var(--success-text)" }}>
+                          <CheckIcon size={15} style={{ color: "var(--success)" }} />
+                          {answer.filename ?? "Uploaded"}
+                          <button
+                            className="quiet-link"
+                            style={{ marginLeft: "auto" }}
+                            onClick={() =>
+                              setCustom((c) => {
+                                const next = { ...c };
+                                delete next[q.id];
+                                return next;
+                              })
+                            }
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      )
+                    ) : (
+                      // Reached by `short` AND by a `select` with no options — the
+                      // latter is what pre-builder events stored, and a plain text
+                      // box preserves the answers already collected there. An empty
+                      // dropdown could not be satisfied if the question were required.
+                      <input
+                        className={cls}
+                        value={answer?.value ?? ""}
+                        onChange={(e) => {
+                          clearError();
+                          setValue(e.target.value);
+                        }}
+                      />
+                    )}
 
-              {customQuestions.map((q) => (
-                <label key={q.id} style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <span className="field-label">
-                    {q.label} <span style={{ fontWeight: 400, color: "var(--muted-3)" }}>— host question</span>
-                  </span>
-                  {q.type === "long" ? (
-                    <textarea className="input" rows={2} placeholder="A sentence or two is plenty" value={custom[q.id] ?? ""} onChange={(e) => setCustom({ ...custom, [q.id]: e.target.value })} />
-                  ) : q.type === "select" && q.options?.length ? (
-                    <select className="input" value={custom[q.id] ?? ""} onChange={(e) => setCustom({ ...custom, [q.id]: e.target.value })}>
-                      <option value="">Choose…</option>
-                      {q.options.map((o) => (
-                        <option key={o}>{o}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input className="input" value={custom[q.id] ?? ""} onChange={(e) => setCustom({ ...custom, [q.id]: e.target.value })} />
-                  )}
-                </label>
-              ))}
-
-              {showSource && (
-                <label style={{ display: "flex", flexDirection: "column", gap: 6, maxWidth: 280 }}>
-                  <span className="field-label">How did you hear about this?</span>
-                  <select className="input" value={source} onChange={(e) => setSource(e.target.value)}>
-                    {SOURCE_OPTIONS.map((s) => (
-                      <option key={s}>{s}</option>
-                    ))}
-                  </select>
-                </label>
-              )}
+                    {err && <span style={{ fontSize: 12, color: "var(--danger-text)" }}>{err}</span>}
+                  </label>
+                );
+              })}
 
               {detail.allowPlusOne && (
                 <button
@@ -480,6 +630,7 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
                   disabled={registerMutation.isPending || !fullName.trim()}
                   onClick={() => {
                     setError(null);
+                    if (!validateAnswers()) return;
                     registerMutation.mutate();
                   }}
                 >
