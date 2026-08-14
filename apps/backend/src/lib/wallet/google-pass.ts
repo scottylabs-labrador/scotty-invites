@@ -36,8 +36,9 @@ export function objectIdFor(row: PassRow, issuerId: string): string {
 
 /** One per event, created over the REST API — never embedded in the save JWT. */
 export function buildEventTicketClass(row: PassRow, cfg: GoogleWalletConfig): EventTicketClass {
-  // The single dark-mode predicate — identical in pass-bundle.ts and in
-  // TicketsPage.tsx:15, so all three renderings of one event agree.
+  // The single dark-mode predicate — identical in pass-bundle.ts,
+  // TicketsPage.tsx:16, and EventForm.tsx's organizer preview, so all four
+  // renderings of one event agree.
   const dark = row.event.passStyle !== "light";
   return {
     id: classIdFor(row, cfg.issuerId),

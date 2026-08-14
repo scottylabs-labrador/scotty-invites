@@ -1,8 +1,10 @@
 # Apple Wallet certificates
 
-The `.pkpass` bundle is built and correct. It cannot be **signed** without a Pass Type ID
-certificate, which requires a paid Apple Developer Program membership ScottyLabs does not currently
-hold. Until then `/tickets` shows "Apple Wallet — coming soon" and the endpoint returns a 503.
+The `.pkpass` bundle is built to the structure described in Apple's archived Wallet Developer
+Guide, but it has never been validated against an actual device. It cannot be **signed** without a
+Pass Type ID certificate, which requires a paid Apple Developer Program membership ScottyLabs does
+not currently hold. Until then `/tickets` shows "Apple Wallet — coming soon" and the endpoint
+returns a 503.
 
 This is what to do the day the account exists.
 
@@ -99,8 +101,11 @@ every pass will fail to verify.
 openssl x509 -in pass-cert.pem -noout -subject
 ```
 
-The `OU` field is the team ID. Set `APPLE_TEAM_ID` to it. It must equal `pass.json`'s
-`teamIdentifier` or iOS rejects the pass.
+The `OU` field is the team ID. Set `APPLE_TEAM_ID` to it.
+
+**Unconfirmed:** it is widely reported that this must equal `pass.json`'s `teamIdentifier` or iOS
+rejects the pass. We could not read an Apple page saying so. Match them anyway — there is no reason
+to differ — and step 9 below tells you how to compare the two values directly.
 
 ## 8. Flatten the PEMs and set the environment
 
@@ -161,9 +166,12 @@ assuming:
 openssl x509 -in pass-cert.pem -noout -enddate
 ```
 
-Put a calendar reminder one month before whatever that prints. When the certificate expires, newly
-generated passes stop installing while already-installed passes keep working — a silent failure
-nobody reports.
+Put a calendar reminder one month before whatever that prints.
+
+**Unconfirmed:** it is widely reported that when the certificate expires, newly generated passes
+stop installing while already-installed passes keep working — a silent failure nobody reports. We
+could not read an Apple page confirming this behavior either, so treat it as a reason to renew
+early rather than a guarantee of what happens if you don't.
 
 ## Note on the icon
 

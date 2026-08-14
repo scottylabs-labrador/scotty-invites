@@ -136,9 +136,20 @@ never real newlines. Set the same three in Railway for the deployed service.
 - It creates (or updates) one `EventTicketClass` per event over the REST API. The first save click
   for an event does the call; later clicks skip it while the class body is unchanged, and an
   organizer's edit to the title or venue pushes through on the next click.
-- Every outbound call to Google is capped at 5 seconds (`AbortSignal.timeout`). A slow Google
-  produces the "didn't respond in time" note rather than a hung request.
-- It does **not** pre-create the `EventTicketObject`; the object rides in the save JWT, which
-  measures ~1350 characters worst case against Google's documented 1800-character safe length
-  (<https://developers.google.com/wallet/tickets/events/web>).
+- Every individual outbound call to Google is capped at 5 seconds (`AbortSignal.timeout`) — that is
+  a per-call budget, not a per-save one. A single "Save to Google Wallet" click can make up to
+  three sequential calls (the access-token fetch, the class insert, and — only on a 409 — a
+  follow-up update PUT; see `apps/backend/src/lib/wallet/google-api.ts:16-21`), so the worst case
+  for one click is up to ~15 seconds, not 5. A slow Google produces the "didn't respond in time"
+  note rather than a hung request.
+- It does **not** pre-create the `EventTicketObject`; the object rides in the save JWT. Measured
+  directly by calling this branch's own `buildEventTicketObject` + `signJwt`
+  (`apps/backend/src/lib/wallet/google-pass.ts`), against Google's documented 1800-character safe
+  length (<https://developers.google.com/wallet/tickets/events/web>):
+  - a typical ticket (short name, short contact email): ~1230 characters
+  - this branch's own worst-case test fixture (`google-pass.test.ts`'s `WORST_CASE` — a name
+    truncated to 40 code points by `truncateDisplayName`, plus a long event title/location): 1486
+  - that same fixture with its contact email swapped for an RFC 5321-maximum 254-character
+    address — `contactEmail` has no length cap in the contract, unlike the ticket holder name —
+    measures 1744, only ~56 characters under the 1800 limit.
 - It does **not** update or expire passes after they are saved.

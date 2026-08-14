@@ -1,7 +1,7 @@
 # ScottyLabs Invites
 
 A Luma-style event signup system for ScottyLabs — browse events, one-click signup with CMU
-email magic links, numbered **Scotty Invite** QR passes (wallet-ready, transferable +1),
+email magic links, numbered **Scotty Invite** QR passes (transferable +1),
 organizer dashboards, door check-in, committee-scoped admin tools, and MCP data access.
 
 Built from the design handoff in `design_handoff_scottylabs_invites/` (see `HANDOFF.md` +

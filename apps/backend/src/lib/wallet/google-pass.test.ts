@@ -9,16 +9,26 @@ const KEY_PEM = generateKeyPairSync("rsa", { modulusLength: 2048 })
   .privateKey.export({ type: "pkcs8", format: "pem" })
   .toString();
 
-// Worst case for JWT length under RegisterBody.fullName's
-// `z.string().min(1).max(120)` (packages/contract/src/index.ts): Zod's
-// max() counts the string's UTF-16 `.length`, not Unicode code points, so a
-// name built from single-code-unit multi-byte characters (BMP, like this
-// one) fits 120 *glyphs* in that budget. A name built from surrogate-pair
-// (astral) characters would only fit 60 glyphs in the same length budget —
-// fewer total UTF-8 bytes once JSON-stringified and base64url-encoded, so it
-// is not the worst case. contactEmail (also carried in the JWT, via
-// textModulesData) has no `.max()` in the contract at all; 60 characters
-// here is a plausible-but-long real address, not a true upper bound.
+// This fixture's name is single-code-unit multi-byte (BMP, like this
+// character), which is NOT the worst case for what actually lands in the
+// JWT. RegisterBody.fullName's `z.string().min(1).max(120)`
+// (packages/contract/src/index.ts) counts the string's UTF-16 `.length`, not
+// Unicode code points, so a BMP name can reach 120 Zod-permitted glyphs
+// while a surrogate-pair (astral) name only reaches 60 — but
+// ticketHolderName never sees that raw Zod-permitted length:
+// truncateDisplayName (google-pass.ts) caps it to 40 *code points*
+// regardless of input, so the JWT always carries exactly 40 characters and
+// the deciding factor is bytes per character, not glyphs admitted by Zod. An
+// astral character costs 4 UTF-8 bytes against this BMP character's 3, and a
+// JSON-escaped control character (fullName has no charset restriction) costs
+// 6 ASCII bytes once JSON.stringify escapes it — both beat this fixture.
+// Measured directly with this file's buildSaveUrl: this BMP fixture 1486, a
+// 40-code-point astral name 1539, a 40-code-point run of control characters
+// 1646. All comfortably under Google's 1800-character safe length, so this
+// fixture still validates the length invariant; it just is not the maximal
+// input. contactEmail (also carried in the JWT, via textModulesData) has no
+// `.max()` in the contract at all; 60 characters here is a plausible-but-long
+// real address, not a true upper bound.
 const WORST_CASE_NAME = "測".repeat(120);
 const WORST_CASE_CONTACT_EMAIL = "tartanhacks-2026-organizing-committee-contact@scottylabs.org";
 
@@ -61,8 +71,8 @@ function saveUrl(row: PassRow, cfg: GoogleWalletConfig): string {
 
 describe("google wallet save link", () => {
   it("stays under Google's documented 1800-character safe JWT length for a worst-case event", () => {
-    // Measured 1490 with this fixture (120-char multi-byte name, truncated to
-    // 40 by truncateDisplayName, plus a 60-char contact email) — 310
+    // Measured 1486 with this fixture (120-char multi-byte name, truncated to
+    // 40 by truncateDisplayName, plus a 60-char contact email) — 314
     // characters of real margin, versus 1799 (25 characters of margin) before
     // ticketHolderName was bounded and the fixture used a worst-case name.
     const jwt = saveUrl(WORST_CASE, CFG).slice(SAVE_PREFIX.length);
@@ -110,6 +120,12 @@ describe("google wallet save link", () => {
     expect(ticketClass.issuerName).toBe("ScottyLabs");
     expect(ticketClass.reviewStatus).toBe("UNDER_REVIEW");
     expect(ticketClass.eventName).toBeDefined();
+  });
+
+  it("renders a light background for passStyle: light — the other branch of the shared dark-mode predicate", () => {
+    const row: PassRow = { ...WORST_CASE, event: { ...WORST_CASE.event, passStyle: "light" } };
+    const ticketClass = buildEventTicketClass(row, CFG);
+    expect(ticketClass.hexBackgroundColor).toBe("#ffffff");
   });
 
   it("returns null instead of throwing when the service-account key is unusable", () => {

@@ -67,6 +67,13 @@ describe("pkpass bundle", () => {
     expect(passJson.authenticationToken).toBeUndefined();
   });
 
+  it("renders light colors for passStyle: light — the other branch of the shared dark-mode predicate", () => {
+    const passJson = buildPassJson({ ...ROW, event: { ...ROW.event, passStyle: "light" } }, CFG);
+    expect(passJson.foregroundColor).toBe("rgb(30,30,30)");
+    expect(passJson.backgroundColor).toBe("rgb(255,255,255)");
+    expect(passJson.labelColor).toBe("rgb(95,111,127)");
+  });
+
   it("returns null instead of throwing when the signing certificates are unparseable", async () => {
     const signature = await signManifest(Buffer.from("{}"), {
       cert: "-----BEGIN CERTIFICATE-----\\nnot-a-cert\\n-----END CERTIFICATE-----",

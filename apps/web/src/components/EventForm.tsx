@@ -547,7 +547,7 @@ export default function EventForm({
     ? `${new Date(`${v.date}T${v.startTime}:00`).toLocaleString("en-US", { month: "short" }).toUpperCase()} ${String(new Date(`${v.date}T${v.startTime}:00`).getDate()).padStart(2, "0")} · ${v.startTime}`
     : "OCT 03 · 16:00";
   const previewLoc = (v.location || "Location TBD").split(",")[0].toUpperCase().slice(0, 18);
-  const dark = v.passStyle === "dark";
+  const dark = v.passStyle !== "light";
   const mutedFg = dark ? "rgba(255,255,255,0.65)" : "#5f6f7f";
 
   return (

@@ -10,8 +10,9 @@ export interface PassConfig {
 
 /** The pass.json body. Pure — no env, no database. */
 export function buildPassJson(row: PassRow, cfg: PassConfig): Record<string, unknown> {
-  // The single dark-mode predicate — identical in google-pass.ts and in
-  // TicketsPage.tsx:15, so all three renderings of one event agree.
+  // The single dark-mode predicate — identical in google-pass.ts,
+  // TicketsPage.tsx:16, and EventForm.tsx's organizer preview, so all four
+  // renderings of one event agree.
   const dark = row.event.passStyle !== "light";
   return {
     formatVersion: 1,
