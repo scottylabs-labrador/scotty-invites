@@ -162,4 +162,75 @@ describe("POST /api/events/:code/register — answer validation", () => {
       await setControlsReturningPrevious({ phone: before.phone });
     }
   });
+
+  it("rejects a non-UUID value for a file answer", async () => {
+    const committee = await makeCommittee();
+    const organizer = await makeUser({ admin: { committeeId: committee.id } });
+    const event = await publish(organizer.cookie, committee.id, {
+      hostQuestions: [{ label: "Portfolio", type: "file" }],
+    });
+    const question = event.questions.find((q) => q.label === "Portfolio")!;
+    const guest = await makeUser();
+    const prior = await seedCancelled(event.id, guest.user.id);
+
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/events/${event.shortCode}/register`,
+      headers: { cookie: guest.cookie },
+      payload: { fullName: "Jane Tartan", custom: [{ questionId: question.id, value: "not-a-uuid" }] },
+    });
+
+    expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "answer_file" });
+    const still = await db.select().from(schema.registrations).where(eq(schema.registrations.id, prior.id));
+    expect(still).toHaveLength(1);
+  });
+
+  // The plan calls this out by name: major_year/dietary/source are seeded as
+  // type "select" with options: null (see the createEvent handler's `standard`
+  // literal). Without the router's guard at the top of the per-question loop
+  // ("major_year / dietary / resume / source arrive in their own body fields"),
+  // these questions would fall through into the same value/select-option checks
+  // as a host question. Real answers for these three never travel through
+  // `custom` — EventPage's `answerable` filter only ever sends `custom` entries
+  // for `kind: "custom"` questions plus `phone`/`tshirt` — so the only way to
+  // reach the guarded branch at all is a payload that spoofs a `custom` entry
+  // keyed to one of these standard question ids.
+  it("keeps registering guests once major_year, dietary and source are captured, and ignores a spoofed custom answer for one of them", async () => {
+    const before = await setControlsReturningPrevious({ major_year: true, dietary: true, source: true });
+    try {
+      const committee = await makeCommittee();
+      const organizer = await makeUser({ admin: { committeeId: committee.id } });
+      const event = await publish(organizer.cookie, committee.id, {
+        captures: { major_year: true, dietary: true, resume: false, source: true, phone: false, tshirt: false },
+      });
+      const majorYear = event.questions.find((q) => q.key === "major_year")!;
+      expect(majorYear.options).toBeNull();
+
+      const plainGuest = await makeUser();
+      const plain = await app.inject({
+        method: "POST",
+        url: `/api/events/${event.shortCode}/register`,
+        headers: { cookie: plainGuest.cookie },
+        payload: { fullName: "Jane Tartan", custom: [] },
+      });
+      expect(plain.statusCode).toBe(200);
+
+      const spoofingGuest = await makeUser();
+      const spoofed = await app.inject({
+        method: "POST",
+        url: `/api/events/${event.shortCode}/register`,
+        headers: { cookie: spoofingGuest.cookie },
+        payload: { fullName: "Jane Tartan", custom: [{ questionId: majorYear.id, value: "Not a real option" }] },
+      });
+      expect(spoofed.statusCode).toBe(200);
+      const { registrationId } = spoofed.json() as { registrationId: string };
+      const answers = await db.select().from(schema.answers).where(eq(schema.answers.registrationId, registrationId));
+      // The guard must have skipped the standard question entirely — no answer
+      // row at all, not even a rejected/coerced one.
+      expect(answers).toHaveLength(0);
+    } finally {
+      await setControlsReturningPrevious({ major_year: before.major_year, dietary: before.dietary, source: before.source });
+    }
+  });
 });
