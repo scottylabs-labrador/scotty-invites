@@ -5,7 +5,7 @@ import formbody from "@fastify/formbody";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { initServer } from "@ts-rest/fastify";
-import { and, asc, eq, gte, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { db, schema } from "./db/client";
@@ -167,9 +167,15 @@ export async function buildServer(): Promise<FastifyInstance> {
     return reply.redirect(`${env.appUrl}/signin?verified=1`);
   });
 
-  // Resume upload (multipart) — signed-in users only.
+  // Uploads (multipart) — signed-in users only. Resumes and question answers use
+  // the same endpoint and the same PDF/Word allowlist; `kind` only records which
+  // one it was.
   app.post("/api/files", async (request, reply) => {
     if (!request.authCtx) return reply.status(401).send({ error: "unauthorized", message: "Sign in first." });
+    // `kind` rides in the query string rather than a multipart field: @fastify/multipart
+    // only exposes fields that arrived BEFORE the file part, so a field-based flag is
+    // silently lost by any caller that appends the file first.
+    const kind = (request.query as { kind?: string }).kind === "answer" ? "answer" : "resume";
     const file = await request.file();
     if (!file) return reply.status(400).send({ error: "no_file", message: "Attach a file." });
     if (!RESUME_TYPES.has(file.mimetype)) {
@@ -183,8 +189,8 @@ export async function buildServer(): Promise<FastifyInstance> {
       .insert(schema.files)
       .values({
         ownerUserId: request.authCtx.user.id,
-        kind: "resume",
-        filename: file.filename.slice(0, 200) || "resume.pdf",
+        kind,
+        filename: file.filename.slice(0, 200) || (kind === "answer" ? "upload.pdf" : "resume.pdf"),
         contentType: file.mimetype,
         size: data.length,
         data,
@@ -199,8 +205,13 @@ export async function buildServer(): Promise<FastifyInstance> {
   app.get("/api/files/:id", async (request, reply) => {
     const ctx = request.authCtx;
     if (!ctx) return reply.status(401).send({ error: "unauthorized", message: "Sign in first." });
-    const { id } = request.params as { id: string };
-    if (!/^[0-9a-f-]{36}$/.test(id)) return reply.status(404).send({ error: "not_found", message: "No such file." });
+    const { id: rawId } = request.params as { id: string };
+    // Lower-cased and strictly shaped: the old pattern also matched 36 dashes,
+    // which reached Postgres as a uuid cast error and surfaced as a 500.
+    const id = rawId.toLowerCase();
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(id)) {
+      return reply.status(404).send({ error: "not_found", message: "No such file." });
+    }
     const rows = await db.select().from(schema.files).where(eq(schema.files.id, id));
     const file = rows[0];
     if (!file) return reply.status(404).send({ error: "not_found", message: "No such file." });
@@ -210,13 +221,36 @@ export async function buildServer(): Promise<FastifyInstance> {
       if (ctx.admin.row.role === "super_admin") {
         allowed = true;
       } else {
-        // Only if this file is attached to a registration on one of the admin's committee's events.
+        // Two routes to a committee: the file is the resume on a registration for
+        // one of their events, or it is the value of a `file`-typed answer on one.
         const scoped = await db
           .select({ committeeId: schema.events.committeeId })
           .from(schema.registrations)
           .innerJoin(schema.events, eq(schema.registrations.eventId, schema.events.id))
           .where(eq(schema.registrations.resumeFileId, id));
-        allowed = scoped.some((r) => r.committeeId === ctx.admin!.row.committeeId);
+
+        // The type filter is load-bearing: without it, a guest typing a UUID into a
+        // plain text question would hand an admin read access to whatever file that
+        // UUID names. Pinning the question to the registration's own event and the
+        // uploader to the file's owner closes the same hole from the other side.
+        // The comparison happens in SQL because the jsonb value is decoded twice on
+        // the way into JS and can arrive as a number or an object.
+        const viaAnswer = await db
+          .select({ committeeId: schema.events.committeeId })
+          .from(schema.answers)
+          .innerJoin(schema.eventQuestions, eq(schema.answers.questionId, schema.eventQuestions.id))
+          .innerJoin(schema.registrations, eq(schema.answers.registrationId, schema.registrations.id))
+          .innerJoin(schema.events, eq(schema.registrations.eventId, schema.events.id))
+          .where(
+            and(
+              eq(schema.eventQuestions.type, "file"),
+              eq(schema.eventQuestions.eventId, schema.registrations.eventId),
+              eq(schema.registrations.userId, file.ownerUserId),
+              sql`jsonb_typeof(${schema.answers.value}) = 'string' and ${schema.answers.value} #>> '{}' = ${id}`,
+            ),
+          );
+
+        allowed = [...scoped, ...viaAnswer].some((r) => r.committeeId === ctx.admin!.row.committeeId);
       }
     }
     if (!allowed) return reply.status(403).send({ error: "forbidden", message: "Not yours to read." });
