@@ -35,7 +35,7 @@ async function committeeName(committeeId: string): Promise<string> {
 }
 
 /** Serializes capacity/numbering decisions per event. Must be called inside a transaction. */
-async function lockEvent(tx: Tx, eventId: string): Promise<void> {
+export async function lockEvent(tx: Tx, eventId: string): Promise<void> {
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${"event:" + eventId}))`);
 }
 

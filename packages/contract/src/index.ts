@@ -496,6 +496,21 @@ export const UpdateEventBody = CreateEventBody.omit({ committeeId: true, capture
 });
 export type UpdateEventBody = z.infer<typeof UpdateEventBody>;
 
+/** One row of the organizer's question list. `id` absent means "create this one". */
+export const QuestionDraft = z.object({
+  id: z.string().uuid().optional(),
+  label: z.string().min(1).max(300),
+  type: QuestionType,
+  options: z.array(z.string().min(1).max(120)).max(20).nullable().optional(),
+  required: z.boolean(),
+  visible: z.boolean(),
+});
+export type QuestionDraft = z.infer<typeof QuestionDraft>;
+
+/** The full desired list. The server reconciles it against what exists. */
+export const UpdateQuestionsBody = z.object({ questions: z.array(QuestionDraft).max(40) });
+export type UpdateQuestionsBody = z.infer<typeof UpdateQuestionsBody>;
+
 // ---------------------------------------------------------------------------
 // Admin portal
 // ---------------------------------------------------------------------------
@@ -708,6 +723,20 @@ export const contract = c.router(
         path: "/api/org/events/:id",
         body: UpdateEventBody,
         responses: { 200: z.object({ ok: z.literal(true) }), 400: ErrorBody, 401: ErrorBody, 403: ErrorBody, 404: ErrorBody },
+      },
+      updateQuestions: {
+        method: "PUT",
+        path: "/api/org/events/:id/questions",
+        body: UpdateQuestionsBody,
+        responses: {
+          200: z.object({ ok: z.literal(true), questions: z.array(OrgEventQuestion) }),
+          400: ErrorBody,
+          401: ErrorBody,
+          403: ErrorBody,
+          404: ErrorBody,
+          409: ErrorBody,
+        },
+        summary: "Replace an event's question set without destroying answers",
       },
       createEvent: {
         method: "POST",

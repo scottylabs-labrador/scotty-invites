@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import {
   contract,
+  MAX_CUSTOM_QUESTIONS,
   type QuestionControls,
   type BrowseEvent,
   type EventDetail,
@@ -31,6 +32,7 @@ import {
   approvedCount,
   promoteWaitlist,
   waitlistToPending,
+  lockEvent,
 } from "../services/registrations";
 import { ensureTransfer, revokeTransfer, parseTransferToken, transferUrl } from "../services/transfers";
 import { getQuestionControls, setQuestionControl } from "../services/settings";
@@ -1164,6 +1166,192 @@ export const router = s.router(contract, {
         else await promoteWaitlist(params.id);
       }
       return { status: 200, body: { ok: true } };
+    },
+
+    updateQuestions: async ({ params, body, request }) => {
+      const ctx = ctxOf(request);
+      if (!ctx) return unauthorized;
+      if (!ctx.admin) return forbidden;
+      const scoped = await loadScopedEvent(ctx, params.id);
+      if (scoped === null) return { status: 404, body: { error: "not_found", message: "Event not found" } };
+      if (scoped === "forbidden") return forbidden;
+
+      const existing = await db
+        .select()
+        .from(schema.eventQuestions)
+        .where(eq(schema.eventQuestions.eventId, params.id))
+        .orderBy(asc(schema.eventQuestions.sort));
+      const existingById = new Map(existing.map((q) => [q.id, q]));
+
+      const counts = existing.length
+        ? await db
+            .select({ questionId: schema.answers.questionId, count: sql<number>`count(*)::int` })
+            .from(schema.answers)
+            .where(
+              inArray(
+                schema.answers.questionId,
+                existing.map((q) => q.id),
+              ),
+            )
+            .groupBy(schema.answers.questionId)
+        : [];
+      // Every answer counts, including a cancelled registration's — those rows
+      // survive until the guest re-registers. This snapshot is good enough to
+      // REJECT with (a stale 409 just asks the organizer to reload); it is NOT
+      // good enough to DELETE with. The apply phase re-reads it under the lock.
+      const answered = new Map(counts.map((c) => [c.questionId, c.count]));
+      const controls = await getQuestionControls();
+      const trim = (options: string[] | null | undefined) => (options ?? []).map((o) => o.trim()).filter(Boolean);
+
+      // ---- validate the whole payload before mutating anything ----------------
+      const seen = new Set<string>();
+      for (const draft of body.questions) {
+        if (!draft.id) continue;
+        if (!existingById.has(draft.id) || seen.has(draft.id)) {
+          return {
+            status: 400,
+            body: { error: "unknown_question", message: "That list doesn't match this event's questions any more — reload the page and try again." },
+          };
+        }
+        seen.add(draft.id);
+      }
+      for (const row of existing) {
+        // A payload of custom rows only would otherwise hide or delete all six
+        // standard rows and cascade away every phone and t-shirt answer.
+        if (row.kind === "standard" && !seen.has(row.id)) {
+          return {
+            status: 400,
+            body: { error: "missing_standard", message: "The standard fields can be switched off but not removed — reload the page and try again." },
+          };
+        }
+      }
+      const customCount = body.questions.filter((d) => !d.id || existingById.get(d.id)?.kind === "custom").length;
+      if (customCount > MAX_CUSTOM_QUESTIONS) {
+        return {
+          status: 400,
+          body: { error: "too_many", message: `That's ${customCount} questions — a signup form carries at most ${MAX_CUSTOM_QUESTIONS}.` },
+        };
+      }
+      for (const draft of body.questions) {
+        const row = draft.id ? existingById.get(draft.id)! : null;
+        if (row?.kind === "standard") {
+          // A standard field's label, type and options are ours, not the
+          // organizer's — only `visible` and position come from the payload. And a
+          // key the super admin disabled club-wide cannot be switched back on here,
+          // or "off everywhere" would mean nothing.
+          if (draft.visible && !row.visible && row.key && !controls[row.key as keyof QuestionControls]) {
+            return {
+              status: 400,
+              body: { error: "globally_off", message: `“${row.label}” is switched off for the whole club — a super admin has to turn it back on first.` },
+            };
+          }
+          continue;
+        }
+        const options = trim(draft.options);
+        if (draft.type === "select" && options.length === 0) {
+          return { status: 400, body: { error: "options", message: `Add at least one option to “${draft.label}”, or change it to short text.` } };
+        }
+        const n = row ? (answered.get(row.id) ?? 0) : 0;
+        if (n > 0 && (row!.type !== draft.type || JSON.stringify(trim(row!.options)) !== JSON.stringify(options))) {
+          return {
+            status: 409,
+            body: {
+              error: "locked",
+              message: `“${row!.label}” already has ${n} answer${n === 1 ? "" : "s"} — you can't change its type or options once people have answered.`,
+            },
+          };
+        }
+      }
+
+      // ---- apply --------------------------------------------------------------
+      await db.transaction(async (tx) => {
+        // The same lock registrations take (createRegistration calls this inside
+        // its own transaction). Everything the apply phase decides is re-read HERE,
+        // inside the lock: the reads above happened before it, and a signup that
+        // commits in between is invisible to them. Delete on a stale zero-answer
+        // count and answers.question_id's ON DELETE CASCADE destroys that guest's
+        // answer with no trace. Rejections may run on the stale snapshot; deletes
+        // may not.
+        await lockEvent(tx, params.id);
+
+        const live = await tx
+          .select()
+          .from(schema.eventQuestions)
+          .where(eq(schema.eventQuestions.eventId, params.id))
+          .orderBy(asc(schema.eventQuestions.sort));
+        const liveById = new Map(live.map((q) => [q.id, q]));
+        const liveCounts = live.length
+          ? await tx
+              .select({ questionId: schema.answers.questionId, count: sql<number>`count(*)::int` })
+              .from(schema.answers)
+              .where(
+                inArray(
+                  schema.answers.questionId,
+                  live.map((q) => q.id),
+                ),
+              )
+              .groupBy(schema.answers.questionId)
+          : [];
+        const liveAnswered = new Map(liveCounts.map((c) => [c.questionId, c.count]));
+
+        for (const [i, draft] of body.questions.entries()) {
+          const row = draft.id ? (liveById.get(draft.id) ?? null) : null;
+          // The row was deleted by a concurrent save between the validation read
+          // and this lock. Do not resurrect it — an id we no longer have is not
+          // ours to re-create.
+          if (draft.id && !row) continue;
+          if (!row) {
+            await tx.insert(schema.eventQuestions).values({
+              eventId: params.id,
+              kind: "custom",
+              key: null,
+              label: draft.label,
+              type: draft.type,
+              options: draft.type === "select" ? trim(draft.options) : null,
+              required: draft.required,
+              visible: draft.visible,
+              sort: i,
+            });
+            continue;
+          }
+          if (row.kind === "standard") {
+            await tx.update(schema.eventQuestions).set({ visible: draft.visible, sort: i }).where(eq(schema.eventQuestions.id, row.id));
+            continue;
+          }
+          await tx
+            .update(schema.eventQuestions)
+            .set({
+              label: draft.label,
+              type: draft.type,
+              options: draft.type === "select" ? trim(draft.options) : null,
+              required: draft.required,
+              visible: draft.visible,
+              sort: i,
+            })
+            .where(eq(schema.eventQuestions.id, row.id));
+        }
+
+        // A custom question the organizer dropped. Deleting cascades its answers,
+        // so that is only safe at zero; otherwise hide it, which keeps the answers
+        // and keeps its CSV column. Retired rows sort after everything live.
+        //
+        // `live` and `liveAnswered`, not `existing` and `answered`: this is the
+        // decision the lock exists to protect, so it reads the state the lock is
+        // holding. `seen` is derived from the payload, so it needs no re-read.
+        let tail = body.questions.length;
+        for (const row of live) {
+          if (row.kind !== "custom" || seen.has(row.id)) continue;
+          if ((liveAnswered.get(row.id) ?? 0) > 0) {
+            await tx.update(schema.eventQuestions).set({ visible: false, sort: tail++ }).where(eq(schema.eventQuestions.id, row.id));
+          } else {
+            await tx.delete(schema.eventQuestions).where(eq(schema.eventQuestions.id, row.id));
+          }
+        }
+      });
+
+      // Hand the refreshed list back so the builder can write the new rows' server
+      // ids into its own state — without them a second save re-creates them.
+      return { status: 200, body: { ok: true, questions: await orgQuestions(params.id) } };
     },
 
     createEvent: async ({ body, request }) => {
