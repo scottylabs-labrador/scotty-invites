@@ -1237,9 +1237,14 @@ export const router = s.router(contract, {
         if (row?.kind === "standard") {
           // A standard field's label, type and options are ours, not the
           // organizer's — only `visible` and position come from the payload. And a
-          // key the super admin disabled club-wide cannot be switched back on here,
-          // or "off everywhere" would mean nothing.
-          if (draft.visible && !row.visible && row.key && !controls[row.key as keyof QuestionControls]) {
+          // key the super admin disabled club-wide cannot be visible here, whether
+          // this payload is the one switching it on or it was already visible from
+          // before the control was disabled — "off everywhere" would mean nothing
+          // otherwise. (The register handler already consults the global controls
+          // directly, so this isn't the only thing stopping an answer from being
+          // collected for a globally-off field — it's defense in depth, and it also
+          // keeps the organizer's own view of `visible` honest.)
+          if (draft.visible && row.key && !controls[row.key as keyof QuestionControls]) {
             return {
               status: 400,
               body: { error: "globally_off", message: `“${row.label}” is switched off for the whole club — a super admin has to turn it back on first.` },

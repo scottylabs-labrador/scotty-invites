@@ -222,6 +222,44 @@ describe("PUT /api/org/events/:id/questions", () => {
     }
   });
 
+  it("refuses a standard field that is already visible:true once the club disables its control", async () => {
+    // major_year is on when the event is created, so its row lands visible:true.
+    // A super admin then flips the control off club-wide. Re-saving the SAME
+    // payload (visible stays true, nothing toggled by this request) must still
+    // be refused — an off→on transition isn't the only way to end up with an
+    // enabled field the club has since disabled.
+    const previous = await setControlsReturningPrevious({ major_year: true });
+    try {
+      const committee = await makeCommittee();
+      const organizer = await makeUser({ admin: { committeeId: committee.id } });
+      const created = (
+        await app.inject({
+          method: "POST",
+          url: "/api/org/events",
+          headers: { cookie: organizer.cookie },
+          payload: createEventBody(committee.id, {
+            captures: { major_year: true, dietary: false, resume: false, source: false, phone: false, tshirt: false },
+          }),
+        })
+      ).json() as { id: string };
+      const detail = (
+        await app.inject({ method: "GET", url: `/api/org/events/${created.id}`, headers: { cookie: organizer.cookie } })
+      ).json() as { questions: Parameters<typeof draftsOf>[0] };
+      const majorYear = detail.questions.find((q) => q.label === "Major + class year")!;
+      expect(majorYear.visible).toBe(true);
+
+      await setControlsReturningPrevious({ major_year: false });
+
+      const drafts = draftsOf(detail.questions);
+      // Leave visible untouched — it was already true and stays true in this payload.
+      const res = await put(organizer.cookie, created.id, drafts);
+      expect(res.statusCode).toBe(400);
+      expect(res.json()).toMatchObject({ error: "globally_off" });
+    } finally {
+      await setControlsReturningPrevious(previous);
+    }
+  });
+
   it("refuses a select with no options", async () => {
     const { organizer, event, questions } = await setup();
     const drafts = draftsOf(questions);
@@ -297,6 +335,55 @@ describe("PUT /api/org/events/:id/questions", () => {
     }
   });
 
+  it("ignores a standard row's label and type in the payload — only visible and sort come from the organizer", async () => {
+    const { organizer, event, questions } = await setup();
+    const drafts = draftsOf(questions);
+    const phone = drafts.find((d) => d.label === "Phone number")!;
+    phone.label = "Mangled label";
+    phone.type = "long";
+    // visible is left as-is (false), so this can't also trip the globally_off gate.
+    const res = await put(organizer.cookie, event.id, drafts);
+    expect(res.statusCode).toBe(200);
+
+    const row = (await db.select().from(schema.eventQuestions).where(eq(schema.eventQuestions.id, phone.id!)))[0];
+    expect(row.label).toBe("Phone number");
+    expect(row.type).toBe("short");
+  });
+
+  it("409s an options change even when type stays the same, once people have answered", async () => {
+    const { organizer, event, questions } = await setup([{ label: "Team size", type: "select", options: ["1-2", "3-5"] }]);
+    const team = questions.find((q) => q.label === "Team size")!;
+    const guest = await makeUser();
+    const registration = (
+      await db
+        .insert(schema.registrations)
+        .values({ eventId: event.id, userId: guest.user.id, status: "approved", fullName: "Jane Tartan" })
+        .returning()
+    )[0];
+    await db.insert(schema.answers).values({ registrationId: registration.id, questionId: team.id, value: "1-2" });
+
+    const drafts = draftsOf(questions);
+    const draft = drafts.find((d) => d.id === team.id)!;
+    draft.options = ["1-2", "3-5", "6+"]; // type left untouched
+    const res = await put(organizer.cookie, event.id, drafts);
+    expect(res.statusCode).toBe(409);
+    expect(res.json()).toMatchObject({ error: "locked" });
+  });
+
+  it("sets visible:false on a custom question that stays in the payload, without deleting or hiding it via the delete path", async () => {
+    const { organizer, event, questions } = await setup();
+    const github = questions.find((q) => q.label === "GitHub handle")!;
+    const drafts = draftsOf(questions);
+    drafts.find((d) => d.id === github.id)!.visible = false;
+    const res = await put(organizer.cookie, event.id, drafts);
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { questions: { id: string; visible: boolean }[] };
+    expect(body.questions.find((q) => q.id === github.id)!.visible).toBe(false);
+
+    const row = (await db.select().from(schema.eventQuestions).where(eq(schema.eventQuestions.id, github.id)))[0];
+    expect(row.visible).toBe(false);
+  });
+
   it("reorders two questions without touching anything else about them", async () => {
     const { organizer, event, questions } = await setup([
       { label: "GitHub handle", type: "short" },
@@ -368,5 +455,6 @@ describe("PUT /api/org/events/:id/questions", () => {
     }
     const res = await put(organizer.cookie, event.id, drafts);
     expect(res.statusCode).toBe(400);
+    expect(res.json()).toMatchObject({ error: "too_many" });
   });
 });

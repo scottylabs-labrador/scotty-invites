@@ -507,8 +507,12 @@ export const QuestionDraft = z.object({
 });
 export type QuestionDraft = z.infer<typeof QuestionDraft>;
 
-/** The full desired list. The server reconciles it against what exists. */
-export const UpdateQuestionsBody = z.object({ questions: z.array(QuestionDraft).max(40) });
+/** The full desired list. The server reconciles it against what exists. This cap is
+ *  only a size backstop — the user-facing question-count limit is the handler's
+ *  `too_many` check against MAX_CUSTOM_QUESTIONS, which returns a conversational
+ *  message. Keep this well above the 6 standard rows + MAX_CUSTOM_QUESTIONS so
+ *  zod never fires first and swallows that message. */
+export const UpdateQuestionsBody = z.object({ questions: z.array(QuestionDraft).max(64) });
 export type UpdateQuestionsBody = z.infer<typeof UpdateQuestionsBody>;
 
 // ---------------------------------------------------------------------------
