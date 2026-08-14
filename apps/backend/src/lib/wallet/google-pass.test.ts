@@ -49,13 +49,23 @@ function claimsOf(url: string): Record<string, any> {
   return JSON.parse(Buffer.from(payload, "base64url").toString("utf8"));
 }
 
+/**
+ * buildSaveUrl returns string | null (null = the PEM cannot sign). These three
+ * tests use a real generated key, so null is a bug, not a case to handle.
+ */
+function saveUrl(row: PassRow, cfg: GoogleWalletConfig): string {
+  const url = buildSaveUrl(row, cfg);
+  if (!url) throw new Error("expected a save url");
+  return url;
+}
+
 describe("google wallet save link", () => {
   it("stays under Google's documented 1800-character safe JWT length for a worst-case event", () => {
     // Measured 1490 with this fixture (120-char multi-byte name, truncated to
     // 40 by truncateDisplayName, plus a 60-char contact email) — 310
     // characters of real margin, versus 1799 (25 characters of margin) before
     // ticketHolderName was bounded and the fixture used a worst-case name.
-    const jwt = buildSaveUrl(WORST_CASE, CFG).slice(SAVE_PREFIX.length);
+    const jwt = saveUrl(WORST_CASE, CFG).slice(SAVE_PREFIX.length);
     expect(jwt.length).toBeLessThan(1800);
   });
 
@@ -80,14 +90,14 @@ describe("google wallet save link", () => {
   });
 
   it("carries only the ticket object — the class is pre-created over REST", () => {
-    const claims = claimsOf(buildSaveUrl(WORST_CASE, CFG));
+    const claims = claimsOf(saveUrl(WORST_CASE, CFG));
     expect(Object.keys(claims.payload)).toEqual(["eventTicketObjects"]);
     expect(claims.payload.eventTicketObjects).toHaveLength(1);
     expect(claims.payload.eventTicketObjects[0].classId).toBe(buildEventTicketClass(WORST_CASE, CFG).id);
   });
 
   it("signs a savetowallet JWT issued by the service account", () => {
-    const claims = claimsOf(buildSaveUrl(WORST_CASE, CFG));
+    const claims = claimsOf(saveUrl(WORST_CASE, CFG));
     expect(claims.aud).toBe("google");
     expect(claims.typ).toBe("savetowallet");
     expect(claims.iss).toBe(CFG.saEmail);
@@ -100,5 +110,9 @@ describe("google wallet save link", () => {
     expect(ticketClass.issuerName).toBe("ScottyLabs");
     expect(ticketClass.reviewStatus).toBe("UNDER_REVIEW");
     expect(ticketClass.eventName).toBeDefined();
+  });
+
+  it("returns null instead of throwing when the service-account key is unusable", () => {
+    expect(buildSaveUrl(WORST_CASE, { ...CFG, saKeyPem: "garbage" })).toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { buildPassJson, bundleEntries, manifestFor, type PassConfig } from "./pass-bundle";
+import { buildPassJson, bundleEntries, manifestFor, signManifest, type PassConfig } from "./pass-bundle";
 import type { PassRow } from "./row";
 
 const ROW: PassRow = {
@@ -65,5 +65,14 @@ describe("pkpass bundle", () => {
     const passJson = buildPassJson(ROW, CFG);
     expect(passJson.webServiceURL).toBeUndefined();
     expect(passJson.authenticationToken).toBeUndefined();
+  });
+
+  it("returns null instead of throwing when the signing certificates are unparseable", async () => {
+    const signature = await signManifest(Buffer.from("{}"), {
+      cert: "-----BEGIN CERTIFICATE-----\\nnot-a-cert\\n-----END CERTIFICATE-----",
+      key: "-----BEGIN PRIVATE KEY-----\\nnot-a-key\\n-----END PRIVATE KEY-----",
+      wwdr: "-----BEGIN CERTIFICATE-----\\nnot-a-cert\\n-----END CERTIFICATE-----",
+    });
+    expect(signature).toBeNull();
   });
 });

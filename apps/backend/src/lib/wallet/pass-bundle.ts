@@ -75,30 +75,37 @@ export function manifestFor(entries: { name: string; data: Buffer }[]): Record<s
 /**
  * Detached PKCS#7 signature over the manifest, with the WWDR intermediate
  * included. node-forge is imported lazily so the dependency is only touched
- * when certificates exist.
+ * when certificates exist. Returns null when a PEM cannot be parsed — the
+ * caller turns that into an actionable 503 rather than letting forge's DER
+ * error surface as a generic 500.
  */
 export async function signManifest(
   manifest: Buffer,
   pem: { cert: string; key: string; wwdr: string },
-): Promise<Buffer> {
-  const forge = await import("node-forge");
-  const p7 = forge.default.pkcs7.createSignedData();
-  p7.content = forge.default.util.createBuffer(manifest.toString("binary"));
-  const cert = forge.default.pki.certificateFromPem(pem.cert.replace(/\\n/g, "\n"));
-  const key = forge.default.pki.privateKeyFromPem(pem.key.replace(/\\n/g, "\n"));
-  const wwdr = forge.default.pki.certificateFromPem(pem.wwdr.replace(/\\n/g, "\n"));
-  p7.addCertificate(wwdr);
-  p7.addCertificate(cert);
-  p7.addSigner({
-    key,
-    certificate: cert,
-    digestAlgorithm: forge.default.pki.oids.sha256,
-    authenticatedAttributes: [
-      { type: forge.default.pki.oids.contentType, value: forge.default.pki.oids.data },
-      { type: forge.default.pki.oids.messageDigest },
-      { type: forge.default.pki.oids.signingTime, value: new Date() as unknown as string },
-    ],
-  });
-  p7.sign({ detached: true });
-  return Buffer.from(forge.default.asn1.toDer(p7.toAsn1()).getBytes(), "binary");
+): Promise<Buffer | null> {
+  try {
+    const forge = await import("node-forge");
+    const p7 = forge.default.pkcs7.createSignedData();
+    p7.content = forge.default.util.createBuffer(manifest.toString("binary"));
+    const cert = forge.default.pki.certificateFromPem(pem.cert.replace(/\\n/g, "\n"));
+    const key = forge.default.pki.privateKeyFromPem(pem.key.replace(/\\n/g, "\n"));
+    const wwdr = forge.default.pki.certificateFromPem(pem.wwdr.replace(/\\n/g, "\n"));
+    p7.addCertificate(wwdr);
+    p7.addCertificate(cert);
+    p7.addSigner({
+      key,
+      certificate: cert,
+      digestAlgorithm: forge.default.pki.oids.sha256,
+      authenticatedAttributes: [
+        { type: forge.default.pki.oids.contentType, value: forge.default.pki.oids.data },
+        { type: forge.default.pki.oids.messageDigest },
+        { type: forge.default.pki.oids.signingTime, value: new Date() as unknown as string },
+      ],
+    });
+    p7.sign({ detached: true });
+    return Buffer.from(forge.default.asn1.toDer(p7.toAsn1()).getBytes(), "binary");
+  } catch (err) {
+    console.error("[wallet] apple pkpass signing failed", err);
+    return null;
+  }
 }

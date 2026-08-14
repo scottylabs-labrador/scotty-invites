@@ -106,7 +106,8 @@ export function signJwt(claims: Record<string, unknown>, keyPem: string): string
   return `${signingInput}.${signer.sign(keyPem.replace(/\\n/g, "\n")).toString("base64url")}`;
 }
 
-export function buildSaveUrl(row: PassRow, cfg: GoogleWalletConfig): string {
+/** Null when GOOGLE_WALLET_SA_KEY_PEM cannot sign — the caller returns a 503. */
+export function buildSaveUrl(row: PassRow, cfg: GoogleWalletConfig): string | null {
   const claims = {
     iss: cfg.saEmail,
     aud: "google",
@@ -115,5 +116,10 @@ export function buildSaveUrl(row: PassRow, cfg: GoogleWalletConfig): string {
     origins: [cfg.appUrl],
     payload: { eventTicketObjects: [buildEventTicketObject(row, cfg)] },
   };
-  return `https://pay.google.com/gp/v/save/${signJwt(claims, cfg.saKeyPem)}`;
+  try {
+    return `https://pay.google.com/gp/v/save/${signJwt(claims, cfg.saKeyPem)}`;
+  } catch (err) {
+    console.error("[wallet] google save JWT signing failed", err);
+    return null;
+  }
 }

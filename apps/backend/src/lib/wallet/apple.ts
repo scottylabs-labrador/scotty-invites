@@ -33,6 +33,14 @@ export async function buildPkpass(
     key: env.applePassKey,
     wwdr: env.appleWwdrCert,
   });
+  if (!signature) {
+    return {
+      ok: false,
+      status: 503,
+      message:
+        "Apple Wallet is misconfigured — APPLE_PASS_CERT_PEM, APPLE_PASS_KEY_PEM or APPLE_WWDR_CERT_PEM could not be parsed. Store each PEM on one line with literal \\n escapes and make sure the key is unencrypted. See docs/apple-wallet-certs.md.",
+    };
+  }
 
   const zip = buildZip([
     ...entries,

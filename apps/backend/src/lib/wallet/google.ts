@@ -88,5 +88,7 @@ export async function googleWalletSaveUrl(
     return { ok: false, status: 503, message };
   }
 
-  return { ok: true, url: buildSaveUrl(row, cfg) };
+  const url = buildSaveUrl(row, cfg);
+  if (!url) return { ok: false, status: 503, message: BAD_KEY };
+  return { ok: true, url };
 }
