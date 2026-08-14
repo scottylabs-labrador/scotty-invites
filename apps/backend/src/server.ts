@@ -246,7 +246,8 @@ export async function buildServer(): Promise<FastifyInstance> {
               eq(schema.eventQuestions.type, "file"),
               eq(schema.eventQuestions.eventId, schema.registrations.eventId),
               eq(schema.registrations.userId, file.ownerUserId),
-              sql`jsonb_typeof(${schema.answers.value}) = 'string' and ${schema.answers.value} #>> '{}' = ${id}`,
+              sql`jsonb_typeof(${schema.answers.value}) = 'string'`,
+              sql`${schema.answers.value} #>> '{}' = ${id}`,
             ),
           );
 

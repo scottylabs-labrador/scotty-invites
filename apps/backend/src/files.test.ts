@@ -44,6 +44,21 @@ describe("uploads for question answers", () => {
     expect(rows[0].kind).toBe("answer");
   });
 
+  it("defaults to kind resume when no kind is given in the query string", async () => {
+    const guest = await makeUser();
+    const part = multipartUpload("resume.pdf", "application/pdf", Buffer.from("%PDF-1.4"));
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/files",
+      headers: { cookie: guest.cookie, "content-type": part.contentType },
+      payload: part.body,
+    });
+    expect(res.statusCode).toBe(200);
+    const { id } = res.json() as { id: string };
+    const rows = await db.select().from(schema.files).where(eq(schema.files.id, id));
+    expect(rows[0].kind).toBe("resume");
+  });
+
   it("lets the committee admin who asked the question read the file, and nobody else's", async () => {
     const mine = await makeCommittee();
     const theirs = await makeCommittee();
@@ -76,7 +91,39 @@ describe("uploads for question answers", () => {
     expect(asOutsider.statusCode).toBe(403);
   });
 
-  it("does not hand out a file just because someone typed its id into a text question", async () => {
+  it("does not hand out a file just because someone typed its id into a text question, even when the registrant owns it", async () => {
+    const committee = await makeCommittee();
+    const organizer = await makeUser({ admin: { committeeId: committee.id } });
+    const event = await publishWithQuestion(organizer.cookie, committee.id, { label: "Anything", type: "short" });
+
+    // The registrant must own the file themselves: otherwise `registrations.userId
+    // = file.ownerUserId` alone would already fail the query, and the assertion
+    // below would pass even if the `type = 'file'` filter were deleted. Only with
+    // matching ownership does the type filter become the sole thing standing
+    // between the admin and the file.
+    const guest = await makeUser();
+    const part = multipartUpload("private.pdf", "application/pdf", Buffer.from("%PDF-1.4"));
+    const upload = await app.inject({
+      method: "POST",
+      url: "/api/files?kind=answer",
+      headers: { cookie: guest.cookie, "content-type": part.contentType },
+      payload: part.body,
+    });
+    const fileId = (upload.json() as { id: string }).id;
+
+    const registered = await app.inject({
+      method: "POST",
+      url: `/api/events/${event.shortCode}/register`,
+      headers: { cookie: guest.cookie },
+      payload: { fullName: "Jane Tartan", custom: [{ questionId: event.question.id, value: fileId }] },
+    });
+    expect(registered.statusCode).toBe(200);
+
+    const res = await app.inject({ method: "GET", url: `/api/files/${fileId}`, headers: { cookie: organizer.cookie } });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("does not hand out a stranger's file just because someone typed its id into a text question", async () => {
     const committee = await makeCommittee();
     const organizer = await makeUser({ admin: { committeeId: committee.id } });
     const event = await publishWithQuestion(organizer.cookie, committee.id, { label: "Anything", type: "short" });
