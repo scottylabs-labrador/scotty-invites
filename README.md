@@ -71,10 +71,15 @@ cd apps/web && pnpm dev
   promotion), declined, waitlisted, +1 claimed, digests (hourly/daily/weekly to
   `updates_email`, only when there's activity), pending->24 h escalation (immediate, once per
   registration). Every guest email carries the event's `contact_email` reply-to.
-- **Wallet passes**: `GET /api/tickets/:id/apple.pkpass` (signed PKCS#7 .pkpass) and
-  `GET /api/tickets/:id/google-wallet` (fat Save-to-Wallet JWT) are fully implemented and
-  activate when the `APPLE_PASS_*` / `GOOGLE_WALLET_*` env vars are configured; until then
-  they return a friendly 503 the UI surfaces inline.
+- **Wallet passes**: `GET /api/tickets/:id/google-wallet` builds the Save-to-Google-Wallet link
+  (the `EventTicketClass` is created over the Wallet REST API and the JWT carries only the ticket
+  object, staying inside Google's 1800-character safe length) — it activates once the
+  `GOOGLE_WALLET_*` env vars are set; see [docs/google-wallet-setup.md](docs/google-wallet-setup.md).
+  `GET /api/tickets/:id/apple.pkpass` builds a signed PKCS#7 `.pkpass`, but signing needs an Apple
+  Developer Program membership ScottyLabs does not hold, so the Apple button renders as "coming
+  soon"; the certificate steps are written up in
+  [docs/apple-wallet-certs.md](docs/apple-wallet-certs.md). Both endpoints return a 503 the UI
+  surfaces inline when they are unconfigured or misconfigured.
 - **MCP** (`APP_MODE=mcp`): streamable-HTTP server secured with **OAuth 2.1** per the MCP
   auth spec — clients hit a 401 challenge, discover the authorization server via RFC 9728,
   dynamically register (RFC 7591), and send the user to `invite.scottylabs.org` to approve

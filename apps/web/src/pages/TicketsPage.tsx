@@ -170,7 +170,13 @@ function PassCard({ ticket }: { ticket: TicketView }) {
             </div>
           )}
           <div style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--muted-3)", textAlign: "center" }}>
-            Issued as real passes — PKPass and Google Wallet objects.
+            {me.wallet.apple && me.wallet.google
+              ? "Add it to Apple Wallet or Google Wallet — or just show the QR."
+              : me.wallet.google
+                ? "Save it to Google Wallet — Apple Wallet is coming soon."
+                : me.wallet.apple
+                  ? "Save it to Apple Wallet — Google Wallet is coming soon."
+                  : "Your QR is the ticket — wallet passes are coming soon."}
           </div>
         </>
       )}

@@ -116,7 +116,7 @@ export function ticketEmail(opts: {
   const inner = `${h1(title)}
 ${p(`${escapeHtml(opts.guestName.split(" ")[0] || opts.guestName)}, Scotty Invite <b>Nº ${pad3(opts.number)}</b> is yours.`)}
 ${eventBlock(opts.ev)}
-${p(`Show the QR under <b>My tickets</b> at the door — or add it to your wallet. Your pass serial is ${mono(opts.serial)}.`)}
+${p(`Show the QR under <b>My tickets</b> at the door. Your pass serial is ${mono(opts.serial)}.`)}
 ${button(`${env.appUrl}/tickets`, "View my Scotty Invite")}
 ${contactLine(opts.ev.contactEmail)}`;
   return {
