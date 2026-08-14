@@ -489,6 +489,16 @@ export interface EventFormProps {
   footerExtra?: React.ReactNode;
   /** Edit mode: the Save questions button, which posts to its own endpoint. */
   questionsActions?: React.ReactNode;
+  /**
+   * Edit mode: true while the questions PUT is in flight. The question rows and
+   * the "Data to capture" toggles both feed the same `questions` array that the
+   * save's `onSuccess` overwrites wholesale with the server snapshot — an edit
+   * made to either while the request is outstanding would otherwise vanish
+   * silently the moment the response lands. Freezing both for the round trip
+   * closes that window; nothing else on the screen touches `questions`, so
+   * nothing else needs to freeze.
+   */
+  questionsPending?: boolean;
   /** Slot under the pass preview — publish button, or save/cancel. */
   railActions: React.ReactNode;
 }
@@ -510,6 +520,7 @@ export default function EventForm({
   registrationExtra,
   footerExtra,
   questionsActions,
+  questionsPending = false,
   railActions,
 }: EventFormProps) {
   const set = <K extends keyof EventFormValues>(key: K, value: EventFormValues[K]) => onChange({ ...v, [key]: value });
@@ -684,7 +695,16 @@ export default function EventForm({
               : "Andrew ID and name come free with andrew sign-in. Ask only for what this event needs."
           }
         >
-          <div style={{ display: "flex", flexDirection: "column", marginTop: 10 }}>
+          {/*
+            A plain <fieldset disabled> here, rather than threading a `disabled`
+            prop through every toggle, is what lets these rows freeze during a
+            questions save without editing each button — see `questionsPending`
+            on EventFormProps for why they must freeze at all.
+          */}
+          <fieldset
+            disabled={questionsPending}
+            style={{ display: "flex", flexDirection: "column", marginTop: 10, border: "none", margin: 0, padding: 0, minWidth: 0, opacity: questionsPending ? 0.55 : 1, transition: "opacity 150ms var(--ease)" }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 2px", borderBottom: "1px solid var(--border-subtle)", opacity: 0.65 }}>
               <Switch on />
               <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text)" }}>Andrew ID + name</span>
@@ -735,15 +755,26 @@ export default function EventForm({
                     <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted-3)" }}>{c.note}</span>
                   </button>
                 ))}
-          </div>
+          </fieldset>
         </Card>
 
-        <QuestionsCard
-          questions={v.questions}
-          onChange={(next) => set("questions", next)}
-          isEdit={isEdit}
-          actions={questionsActions}
-        />
+        {/*
+          Same reasoning and the same <fieldset disabled> mechanism as the "Data
+          to capture" toggles above — wrapping the call site freezes every row,
+          drag handle, and add/remove control inside QuestionsCard for the
+          duration of the save without editing QuestionsCard itself.
+        */}
+        <fieldset
+          disabled={questionsPending}
+          style={{ border: "none", margin: 0, padding: 0, minWidth: 0, opacity: questionsPending ? 0.55 : 1, transition: "opacity 150ms var(--ease)" }}
+        >
+          <QuestionsCard
+            questions={v.questions}
+            onChange={(next) => set("questions", next)}
+            isEdit={isEdit}
+            actions={questionsActions}
+          />
+        </fieldset>
 
         <Card title="Updates & contact" sub="Status emails go out via Mailgun. Every invite shows a contact.">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginTop: 14 }}>

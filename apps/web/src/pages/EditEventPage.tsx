@@ -267,6 +267,7 @@ export default function EditEventPage() {
           myCommittee={event.committee}
           isSuper={!!isSuper}
           controls={committeesQuery.data?.questionControls}
+          questionsPending={saveQuestions.isPending}
           registrationExtra={
             event.model === "capacity" && values.model !== "capacity" && event.waitlistCount > 0 ? (
               <div className="fade-in" style={{ marginTop: 14, display: "flex", alignItems: "flex-start", gap: 10, background: "#fdf3e4", border: "1px solid #f0dcb4", borderRadius: 8, padding: "12px 14px", fontSize: 12.5, color: "#654a00", lineHeight: 1.5 }}>
