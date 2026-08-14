@@ -1,17 +1,20 @@
-import { createSign } from "node:crypto";
-import { and, eq, isNull } from "drizzle-orm";
-import { db, schema } from "../../db/client";
 import { env } from "../../env";
-import { fmtLongDate, fmtTimeWithZone } from "../format";
+import { loadPassRow } from "./row";
+import { buildEventTicketClass, buildSaveUrl, type GoogleWalletConfig } from "./google-pass";
+import { accessToken, upsertEventTicketClass } from "./google-api";
 
-function b64url(input: Buffer | string): string {
-  return Buffer.from(input).toString("base64url");
-}
+const UNREACHABLE =
+  "Google Wallet didn't respond in time. This is usually transient — try again in a moment. If it keeps happening, see docs/google-wallet-setup.md.";
+
+const BAD_KEY =
+  "Google Wallet is misconfigured — GOOGLE_WALLET_SA_KEY_PEM isn't a usable RSA private key. Paste the `private_key` value from the service-account JSON, keeping its \\n escapes, not the whole JSON file. See docs/google-wallet-setup.md.";
 
 /**
- * "Fat" Save-to-Google-Wallet JWT: embeds the EventTicketClass (one per event)
- * and EventTicketObject (one per ticket) so no Wallet API pre-provisioning is
- * needed. Activates when GOOGLE_WALLET_* env vars are configured.
+ * Save-to-Google-Wallet link. The EventTicketClass is created (or refreshed)
+ * once per event through the Wallet REST API and the save JWT carries only the
+ * EventTicketObject — Google documents 1800 characters as the safe encoded-JWT
+ * length, and the old class-inline "fat" JWT measured 1976-2171. Activates when
+ * the GOOGLE_WALLET_* env vars are configured; see docs/google-wallet-setup.md.
  */
 export async function googleWalletSaveUrl(
   ticketId: string,
@@ -21,65 +24,47 @@ export async function googleWalletSaveUrl(
     return {
       ok: false,
       status: 503,
-      message: "Google Wallet passes aren't configured yet — set GOOGLE_WALLET_ISSUER_ID, GOOGLE_WALLET_SA_EMAIL and GOOGLE_WALLET_SA_KEY_PEM.",
+      message:
+        "Google Wallet passes aren't configured yet — set GOOGLE_WALLET_ISSUER_ID, GOOGLE_WALLET_SA_EMAIL and GOOGLE_WALLET_SA_KEY_PEM.",
     };
   }
 
-  const rows = await db
-    .select({ ticket: schema.tickets, event: schema.events, user: schema.users, committee: schema.committees })
-    .from(schema.tickets)
-    .innerJoin(schema.events, eq(schema.tickets.eventId, schema.events.id))
-    .innerJoin(schema.users, eq(schema.tickets.userId, schema.users.id))
-    .innerJoin(schema.committees, eq(schema.events.committeeId, schema.committees.id))
-    .where(and(eq(schema.tickets.id, ticketId), eq(schema.tickets.userId, userId), isNull(schema.tickets.revokedAt)));
-  const row = rows[0];
+  const row = await loadPassRow(ticketId, userId);
   if (!row) return { ok: false, status: 404, message: "Ticket not found" };
 
-  const classId = `${env.googleWalletIssuerId}.scotty_invite_${row.event.shortCode}`;
-  const objectId = `${env.googleWalletIssuerId}.${row.ticket.serial.replace(/[^\w]/g, "_")}_${row.event.shortCode}`;
-
-  const ticketClass = {
-    id: classId,
-    issuerName: "ScottyLabs",
-    eventName: { defaultValue: { language: "en-US", value: row.event.title } },
-    venue: {
-      name: { defaultValue: { language: "en-US", value: row.event.location } },
-      address: { defaultValue: { language: "en-US", value: "Carnegie Mellon University, Pittsburgh, PA" } },
-    },
-    dateTime: { start: row.event.startAt.toISOString(), end: row.event.endAt.toISOString() },
-    reviewStatus: "UNDER_REVIEW",
-    hexBackgroundColor: "#0a0a0a",
+  const cfg: GoogleWalletConfig = {
+    issuerId: env.googleWalletIssuerId,
+    saEmail: env.googleWalletSaEmail,
+    saKeyPem: env.googleWalletSaKey,
+    appUrl: env.appUrl,
   };
 
-  const ticketObject = {
-    id: objectId,
-    classId,
-    state: "ACTIVE",
-    ticketHolderName: row.user.name ?? row.user.email,
-    ticketNumber: row.ticket.serial,
-    barcode: { type: "QR_CODE", value: row.ticket.serial, alternateText: row.ticket.serial },
-    hexBackgroundColor: "#0a0a0a",
-    textModulesData: [
-      { header: "Committee", body: row.committee.name, id: "committee" },
-      { header: "Doors", body: `${fmtLongDate(row.event.startAt)} · ${fmtTimeWithZone(row.event.startAt)}`, id: "doors" },
-      { header: "Questions?", body: row.event.contactEmail, id: "contact" },
-    ],
-  };
+  let token: string;
+  try {
+    token = await accessToken(cfg.saEmail, cfg.saKeyPem);
+  } catch (err) {
+    console.error("[wallet] google access token request failed", err);
+    // AbortSignal.timeout produces a DOMException named TimeoutError; read the
+    // name defensively rather than with instanceof, which varies by runtime.
+    const name = (err as { name?: string } | null)?.name;
+    const timedOut = name === "TimeoutError" || name === "AbortError";
+    return { ok: false, status: 503, message: timedOut ? UNREACHABLE : BAD_KEY };
+  }
 
-  const claims = {
-    iss: env.googleWalletSaEmail,
-    aud: "google",
-    typ: "savetowallet",
-    iat: Math.floor(Date.now() / 1000),
-    origins: [env.appUrl],
-    payload: { eventTicketClasses: [ticketClass], eventTicketObjects: [ticketObject] },
-  };
+  const upserted = await upsertEventTicketClass(buildEventTicketClass(row, cfg), token);
+  if (!upserted.ok) {
+    console.error("[wallet] google eventTicketClass upsert failed", upserted.status, upserted.detail);
+    let message: string;
+    if (upserted.status === 0) {
+      message = UNREACHABLE;
+    } else if (upserted.status === 403) {
+      message =
+        "Google refused this pass — the service account isn't an authorised user on the Wallet issuer account. Invite GOOGLE_WALLET_SA_EMAIL as a Developer under Users in the Google Pay & Wallet Console. See docs/google-wallet-setup.md.";
+    } else {
+      message = `Google Wallet rejected this event's pass template (HTTP ${upserted.status}). Check GOOGLE_WALLET_ISSUER_ID and see docs/google-wallet-setup.md.`;
+    }
+    return { ok: false, status: 503, message };
+  }
 
-  const header = { alg: "RS256", typ: "JWT" };
-  const signingInput = `${b64url(JSON.stringify(header))}.${b64url(JSON.stringify(claims))}`;
-  const signer = createSign("RSA-SHA256");
-  signer.update(signingInput);
-  const signature = signer.sign(env.googleWalletSaKey.replace(/\\n/g, "\n")).toString("base64url");
-
-  return { ok: true, url: `https://pay.google.com/gp/v/save/${signingInput}.${signature}` };
+  return { ok: true, url: buildSaveUrl(row, cfg) };
 }
