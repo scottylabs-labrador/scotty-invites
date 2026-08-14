@@ -25,12 +25,7 @@ export async function buildPkpass(
   if (!row) return { ok: false, status: 404, message: "Ticket not found" };
 
   const entries = bundleEntries(
-    buildPassJson(row, {
-      passTypeId: env.applePassTypeId,
-      teamId: env.appleTeamId,
-      apiUrl: env.apiUrl,
-      transferLinkSecret: env.transferLinkSecret,
-    }),
+    buildPassJson(row, { passTypeId: env.applePassTypeId, teamId: env.appleTeamId }),
   );
   const manifestBuf = Buffer.from(JSON.stringify(manifestFor(entries)));
   const signature = await signManifest(manifestBuf, {

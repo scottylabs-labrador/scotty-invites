@@ -83,9 +83,9 @@ export const env = {
   googleWalletSaKey: process.env.GOOGLE_WALLET_SA_KEY_PEM,
 };
 
-// Fail closed in production: +1 transfer links (and the Apple pass auth token)
-// are HMAC'd with this. Booting prod with the source-visible dev default would
-// make every +1 token forgeable, so refuse to start.
+// Fail closed in production: +1 transfer links are HMAC'd with this. Booting
+// prod with the source-visible dev default would make every +1 token forgeable,
+// so refuse to start.
 const DEV_TRANSFER_SECRET = "dev-transfer-secret-change-me";
 if (env.isProd && (env.transferLinkSecret === DEV_TRANSFER_SECRET || env.transferLinkSecret.length < 32)) {
   throw new Error("TRANSFER_LINK_SECRET must be set to a strong value (>= 32 chars) in production");

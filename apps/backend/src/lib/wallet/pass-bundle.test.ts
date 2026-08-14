@@ -21,8 +21,6 @@ const ROW: PassRow = {
 const CFG: PassConfig = {
   passTypeId: "pass.org.scottylabs.invite",
   teamId: "ABCDE12345",
-  apiUrl: "https://invite.scottylabs.org",
-  transferLinkSecret: "test-secret-not-used-here-0123456789abcdef",
 };
 
 describe("pkpass bundle", () => {
@@ -61,5 +59,11 @@ describe("pkpass bundle", () => {
     expect(passJson.passTypeIdentifier).toBe("pass.org.scottylabs.invite");
     expect(passJson.teamIdentifier).toBe("ABCDE12345");
     expect(passJson.serialNumber).toBe("SIT-001-EUGENEO");
+  });
+
+  it("does not advertise a pass web service, because /api/passes does not exist", () => {
+    const passJson = buildPassJson(ROW, CFG);
+    expect(passJson.webServiceURL).toBeUndefined();
+    expect(passJson.authenticationToken).toBeUndefined();
   });
 });

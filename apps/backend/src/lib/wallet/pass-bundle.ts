@@ -6,8 +6,6 @@ import type { PassRow } from "./row";
 export interface PassConfig {
   passTypeId: string;
   teamId: string;
-  apiUrl: string;
-  transferLinkSecret: string;
 }
 
 /** The pass.json body. Pure — no env, no database. */
@@ -26,11 +24,6 @@ export function buildPassJson(row: PassRow, cfg: PassConfig): Record<string, unk
     foregroundColor: dark ? "rgb(255,255,255)" : "rgb(30,30,30)",
     backgroundColor: dark ? "rgb(10,10,10)" : "rgb(255,255,255)",
     labelColor: dark ? "rgb(158,177,194)" : "rgb(95,111,127)",
-    webServiceURL: `${cfg.apiUrl}/api/passes`,
-    authenticationToken: createHash("sha256")
-      .update(`${cfg.transferLinkSecret}:${row.ticket.id}`)
-      .digest("hex")
-      .slice(0, 32),
     barcodes: [
       {
         format: "PKBarcodeFormatQR",
