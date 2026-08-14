@@ -17,6 +17,7 @@ import {
 } from "@scottylabs-invites/contract";
 import { db, schema } from "../db/client";
 import { env, isCmuEmail } from "../env";
+import { answerText, loadAnswers } from "../lib/answers";
 import { initialsOf, safeEqual } from "../lib/crypto";
 import { fmtStubDate } from "../lib/format";
 import { sendMail } from "../lib/mail";
@@ -195,6 +196,15 @@ async function buildGuestRows(eventId: string): Promise<{ guests: GuestRow[]; re
     : [];
   const fileById = new Map(fileRows.map((f) => [f.id, f]));
 
+  const answersByReg = await loadAnswers(regIds);
+
+  /**
+   * The dashboard re-fetches every 30 s and ships every guest's answers to every
+   * committee admin, uncompressed. Cap what the UI needs; the CSV export carries
+   * the full text.
+   */
+  const DASHBOARD_ANSWER_MAX = 500;
+
   const guests: GuestRow[] = rows.map(({ registration: r, user: u }) => {
     const ticket = ticketByReg.get(r.id);
     const file = r.resumeFileId ? fileById.get(r.resumeFileId) : undefined;
@@ -215,6 +225,12 @@ async function buildGuestRows(eventId: string): Promise<{ guests: GuestRow[]; re
       status: r.status,
       serial: ticket?.serial ?? null,
       createdAt: r.createdAt.toISOString(),
+      answers: (answersByReg.get(r.id) ?? []).map((a) => ({
+        questionId: a.questionId,
+        value: a.value.length > DASHBOARD_ANSWER_MAX ? `${a.value.slice(0, DASHBOARD_ANSWER_MAX)}…` : a.value,
+        fileUrl: a.fileUrl,
+        fileName: a.fileName,
+      })),
     };
   });
   return { guests, regs: rows.map((r) => r.registration) };
@@ -899,27 +915,13 @@ export const router = s.router(contract, {
         plusOnesInvited: regs.filter((r) => r.plusOne && r.status === "approved").length,
       };
 
-      // Pending queue with the guest's first custom-question answer.
       const pendingRegs = regs.filter((r) => r.status === "pending").sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-      const pendingIds = pendingRegs.map((r) => r.id);
-      const answerRows = pendingIds.length
-        ? await db
-            .select({ answer: schema.answers, question: schema.eventQuestions })
-            .from(schema.answers)
-            .innerJoin(schema.eventQuestions, eq(schema.answers.questionId, schema.eventQuestions.id))
-            .where(and(inArray(schema.answers.registrationId, pendingIds), eq(schema.eventQuestions.kind, "custom")))
-        : [];
-      const answerByReg = new Map<string, string>();
-      for (const a of answerRows.sort((x, y) => x.question.sort - y.question.sort)) {
-        if (!answerByReg.has(a.answer.registrationId)) answerByReg.set(a.answer.registrationId, String(a.answer.value ?? ""));
-      }
       const guestByReg = new Map(guests.map((g) => [g.registrationId, g]));
       const pending: PendingItem[] = pendingRegs.map((r) => ({
         registrationId: r.id,
         name: r.fullName,
         initials: initialsOf(r.fullName),
         andrewId: guestByReg.get(r.id)?.andrewId ?? null,
-        answer: answerByReg.get(r.id) ?? null,
         createdAt: r.createdAt.toISOString(),
       }));
 
@@ -948,6 +950,15 @@ export const router = s.router(contract, {
           inviteCode: e.inviteCode,
           url: `${env.appUrl}/e/${e.shortCode}`,
           questionControls: controls,
+          questions: (await orgQuestions(e.id)).map((q) => ({
+            id: q.id,
+            kind: q.kind,
+            key: q.key,
+            label: q.label,
+            type: q.type,
+            options: q.options,
+            required: q.required,
+          })),
         },
         kpis,
         guests,

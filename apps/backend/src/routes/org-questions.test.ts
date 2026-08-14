@@ -458,3 +458,60 @@ describe("PUT /api/org/events/:id/questions", () => {
     expect(res.json()).toMatchObject({ error: "too_many" });
   });
 });
+
+describe("GET /api/org/events/:id/dashboard — answers", () => {
+  it("carries every answer on the guest row, including phone, and repeats none on the pending card", async () => {
+    const committee = await makeCommittee();
+    const organizer = await makeUser({ admin: { committeeId: committee.id } });
+    const created = (
+      await app.inject({
+        method: "POST",
+        url: "/api/org/events",
+        headers: { cookie: organizer.cookie },
+        payload: createEventBody(committee.id, {
+          model: "approval",
+          hostQuestions: [
+            { label: "GitHub handle", type: "short" },
+            { label: "Why this event?", type: "long" },
+          ],
+        }),
+      })
+    ).json() as { id: string; shortCode: string };
+
+    const rows = await db
+      .select()
+      .from(schema.eventQuestions)
+      .where(eq(schema.eventQuestions.eventId, created.id))
+      .orderBy(asc(schema.eventQuestions.sort));
+    const github = rows.find((q) => q.label === "GitHub handle")!;
+    const why = rows.find((q) => q.label === "Why this event?")!;
+
+    const guest = await makeUser();
+    const registered = await app.inject({
+      method: "POST",
+      url: `/api/events/${created.shortCode}/register`,
+      headers: { cookie: guest.cookie },
+      payload: {
+        fullName: "Jane Tartan",
+        custom: [
+          { questionId: github.id, value: "octocat" },
+          { questionId: why.id, value: "I want to learn." },
+        ],
+      },
+    });
+    expect(registered.statusCode).toBe(200);
+
+    const res = await app.inject({ method: "GET", url: `/api/org/events/${created.id}/dashboard`, headers: { cookie: organizer.cookie } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      event: { questions: { id: string; label: string }[] };
+      guests: { registrationId: string; answers: { questionId: string; value: string }[] }[];
+      pending: Record<string, unknown>[];
+    };
+
+    expect(body.guests[0].answers.map((a) => a.value)).toEqual(["octocat", "I want to learn."]);
+    expect(body.event.questions.some((q) => q.label === "Why this event?")).toBe(true);
+    expect(body.pending).toHaveLength(1);
+    expect(body.pending[0]).not.toHaveProperty("answer");
+  });
+});

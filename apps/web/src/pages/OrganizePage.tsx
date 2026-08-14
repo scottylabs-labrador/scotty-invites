@@ -1,11 +1,11 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Dashboard } from "@scottylabs-invites/contract";
 import { api, unwrap } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { Page, Spinner } from "../components/AppShell";
-import { CheckIcon, DownloadIcon, FileTextIcon, LinkIcon, SearchIcon } from "../components/icons";
+import { ChevronDownIcon, CheckIcon, DownloadIcon, FileTextIcon, LinkIcon, SearchIcon } from "../components/icons";
 import { fmtShortDate } from "../lib/format";
 
 const AVATAR_PALETTES = ["#e7f5fa,#0a6b94", "#f3e8fd,#4b2d8f", "#fbe9ed,#991a30", "#e9f5ec,#0d4b17", "#fdf3e4,#654a00"];
@@ -97,6 +97,35 @@ export default function OrganizePage() {
   );
 }
 
+function AnswerList({
+  answers,
+  questionById,
+}: {
+  answers: Dashboard["guests"][number]["answers"];
+  questionById: Map<string, { label: string }>;
+}) {
+  if (answers.length === 0) return <span style={{ fontSize: 12, color: "var(--muted-3)" }}>No answers.</span>;
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      {answers.map((a) => (
+        <div key={a.questionId} style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: "var(--muted-2)", minWidth: 140 }}>
+            {questionById.get(a.questionId)?.label ?? "Question"}
+          </span>
+          {a.fileUrl ? (
+            <a href={a.fileUrl} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--blue-hover)", fontSize: 12.5, fontWeight: 500 }}>
+              <FileTextIcon size={13} />
+              {a.fileName ?? "Download"}
+            </a>
+          ) : (
+            <span style={{ fontSize: 12.5, color: "#38424b", whiteSpace: "pre-wrap", flex: "1 1 200px", minWidth: 0 }}>{a.value}</span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function DashboardBody({
   eventId,
   events,
@@ -110,6 +139,7 @@ function DashboardBody({
   const [search, setSearch] = useState("");
   const [shown, setShown] = useState(25);
   const [copied, setCopied] = useState(false);
+  const [openRow, setOpenRow] = useState<string | null>(null);
   const cancelled = events.find((e) => e.id === eventId)?.status === "cancelled";
 
   const query = useQuery({
@@ -167,6 +197,11 @@ function DashboardBody({
       (g) => g.name.toLowerCase().includes(needle) || (g.andrewId ?? "").toLowerCase().includes(needle) || g.email.toLowerCase().includes(needle),
     );
   }, [d, search]);
+
+  // Expansion state lives outside the query data: the dashboard refetches every
+  // 30 s and react-query replaces `d` wholesale, which would collapse the rows.
+  const questionById = useMemo(() => new Map((d?.event.questions ?? []).map((q) => [q.id, q])), [d]);
+  const guestByReg = useMemo(() => new Map((d?.guests ?? []).map((g) => [g.registrationId, g])), [d]);
 
   if (!d) return <Spinner />;
 
@@ -308,8 +343,8 @@ function DashboardBody({
             </span>
           </div>
           <div className="table-scroll">
-            <div style={{ minWidth: 780 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 0.9fr 1.1fr 0.55fr 1fr 0.7fr 1fr", gap: 10, padding: "10px 20px", borderBottom: "1px solid var(--border-subtle)", fontSize: 10.5, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--muted-3)" }}>
+            <div style={{ minWidth: 820 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1.5fr 0.9fr 1.1fr 0.55fr 1fr 0.7fr 1fr 28px", gap: 10, padding: "10px 20px", borderBottom: "1px solid var(--border-subtle)", fontSize: 10.5, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--muted-3)" }}>
                 <div>Name</div>
                 <div>Andrew ID</div>
                 <div>Major</div>
@@ -317,51 +352,67 @@ function DashboardBody({
                 <div>Dietary</div>
                 <div>Resume</div>
                 <div>Source · Status</div>
+                <div />
               </div>
               {filteredGuests.slice(0, shown).map((g, i) => {
                 const [bg, fg] = AVATAR_PALETTES[i % 5].split(",");
                 const chip = STATUS_CHIP[g.status];
+                const open = openRow === g.registrationId;
                 return (
-                  <div
-                    key={g.registrationId}
-                    style={{ display: "grid", gridTemplateColumns: "1.5fr 0.9fr 1.1fr 0.55fr 1fr 0.7fr 1fr", gap: 10, padding: "12px 20px", borderBottom: "1px solid var(--border-subtle)", fontSize: 13, color: "#38424b", alignItems: "center" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--panel)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
-                  >
-                    <div style={{ fontWeight: 600, color: "var(--text)", display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                      <div style={{ flex: "none", width: 24, height: 24, borderRadius: 100, background: bg, color: fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700 }}>
-                        {g.initials}
+                  <Fragment key={g.registrationId}>
+                    <div
+                      style={{ display: "grid", gridTemplateColumns: "1.5fr 0.9fr 1.1fr 0.55fr 1fr 0.7fr 1fr 28px", gap: 10, padding: "12px 20px", borderBottom: open ? "none" : "1px solid var(--border-subtle)", fontSize: 13, color: "#38424b", alignItems: "center" }}
+                      onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "var(--panel)")}
+                      onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
+                    >
+                      <div style={{ fontWeight: 600, color: "var(--text)", display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                        <div style={{ flex: "none", width: 24, height: 24, borderRadius: 100, background: bg, color: fg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 9, fontWeight: 700 }}>
+                          {g.initials}
+                        </div>
+                        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</span>
+                        {g.plusOne && (
+                          <span style={{ fontSize: 10, fontWeight: 600, color: "var(--blue-pressed)", background: "var(--blue-subtle)", borderRadius: 4, padding: "2px 6px", flex: "none" }}>
+                            +1
+                          </span>
+                        )}
                       </div>
-                      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.name}</span>
-                      {g.plusOne && (
-                        <span style={{ fontSize: 10, fontWeight: 600, color: "var(--blue-pressed)", background: "var(--blue-subtle)", borderRadius: 4, padding: "2px 6px", flex: "none" }}>
-                          +1
+                      <div className="mono" style={{ fontSize: 12, color: "var(--muted-1)" }}>{g.andrewId ?? "—"}</div>
+                      <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.major ?? "—"}</div>
+                      <div>{g.classYear ?? "—"}</div>
+                      <div style={{ color: "var(--muted-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {g.dietary.length ? g.dietary.join(", ") : "—"}
+                      </div>
+                      <div>
+                        {g.resumeUrl ? (
+                          <a href={g.resumeUrl} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--blue-hover)", fontSize: 12, fontWeight: 500 }}>
+                            <FileTextIcon size={13} />
+                            PDF
+                          </a>
+                        ) : (
+                          "—"
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+                        <span style={{ color: "var(--muted-2)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.source ?? "—"}</span>
+                        <span style={{ fontSize: 10.5, fontWeight: 600, color: chip.color, background: chip.background, borderRadius: 100, padding: "3px 10px", marginLeft: "auto", flex: "none" }}>
+                          {STATUS_LABEL[g.status]}
                         </span>
-                      )}
+                      </div>
+                      <button
+                        aria-expanded={open}
+                        aria-label={open ? "Hide answers" : "Show answers"}
+                        onClick={() => setOpenRow(open ? null : g.registrationId)}
+                        style={{ all: "unset", cursor: "pointer", display: "flex", color: "var(--muted-3)", transform: open ? "rotate(180deg)" : undefined, transition: "transform 140ms var(--ease)" }}
+                      >
+                        <ChevronDownIcon size={14} />
+                      </button>
                     </div>
-                    <div className="mono" style={{ fontSize: 12, color: "var(--muted-1)" }}>{g.andrewId ?? "—"}</div>
-                    <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.major ?? "—"}</div>
-                    <div>{g.classYear ?? "—"}</div>
-                    <div style={{ color: "var(--muted-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {g.dietary.length ? g.dietary.join(", ") : "—"}
-                    </div>
-                    <div>
-                      {g.resumeUrl ? (
-                        <a href={g.resumeUrl} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "var(--blue-hover)", fontSize: 12, fontWeight: 500 }}>
-                          <FileTextIcon size={13} />
-                          PDF
-                        </a>
-                      ) : (
-                        "—"
-                      )}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
-                      <span style={{ color: "var(--muted-2)", fontSize: 12, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{g.source ?? "—"}</span>
-                      <span style={{ fontSize: 10.5, fontWeight: 600, color: chip.color, background: chip.background, borderRadius: 100, padding: "3px 10px", marginLeft: "auto", flex: "none" }}>
-                        {STATUS_LABEL[g.status]}
-                      </span>
-                    </div>
-                  </div>
+                    {open && (
+                      <div className="fade-in" style={{ padding: "12px 20px 16px 52px", borderBottom: "1px solid var(--border-subtle)", background: "var(--panel)" }}>
+                        <AnswerList answers={g.answers} questionById={questionById} />
+                      </div>
+                    )}
+                  </Fragment>
                 );
               })}
               {filteredGuests.length === 0 && (
@@ -397,7 +448,7 @@ function DashboardBody({
                   <span className="mono" style={{ fontSize: 11, color: "var(--muted-3)" }}>{p.andrewId ?? ""}</span>
                   <span style={{ marginLeft: "auto", fontSize: 11, color: "var(--muted-3)" }}>{timeAgo(p.createdAt)}</span>
                 </div>
-                {p.answer && <div style={{ fontSize: 12, color: "var(--muted-2)", lineHeight: 1.45 }}>“{p.answer}”</div>}
+                <AnswerList answers={guestByReg.get(p.registrationId)?.answers ?? []} questionById={questionById} />
                 <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
                   <button className="pill pill-blue" style={{ fontSize: 12, padding: "6px 16px" }} onClick={() => approve.mutate(p.registrationId)}>
                     Approve

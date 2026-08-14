@@ -286,6 +286,15 @@ export type TransferPreview = z.infer<typeof TransferPreview>;
 // Organizer
 // ---------------------------------------------------------------------------
 
+export const GuestAnswer = z.object({
+  questionId: z.string(),
+  /** Already normalized from jsonb. Long answers are truncated — the CSV is complete. */
+  value: z.string(),
+  fileUrl: z.string().nullable(),
+  fileName: z.string().nullable(),
+});
+export type GuestAnswer = z.infer<typeof GuestAnswer>;
+
 export const GuestRow = z.object({
   registrationId: z.string(),
   name: z.string(),
@@ -303,6 +312,7 @@ export const GuestRow = z.object({
   status: RegistrationStatus,
   serial: z.string().nullable(),
   createdAt: z.string(),
+  answers: z.array(GuestAnswer),
 });
 export type GuestRow = z.infer<typeof GuestRow>;
 
@@ -311,7 +321,6 @@ export const PendingItem = z.object({
   name: z.string(),
   initials: z.string(),
   andrewId: z.string().nullable(),
-  answer: z.string().nullable(),
   createdAt: z.string(),
 });
 export type PendingItem = z.infer<typeof PendingItem>;
@@ -403,6 +412,8 @@ export const Dashboard = z.object({
     inviteCode: z.string().nullable(),
     url: z.string(),
     questionControls: QuestionControls,
+    /** Labels and types for every answer on this page, sent once instead of per guest. */
+    questions: z.array(EventQuestion),
   }),
   kpis: z.object({
     requests: z.number(),
