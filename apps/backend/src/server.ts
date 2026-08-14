@@ -5,16 +5,17 @@ import formbody from "@fastify/formbody";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
 import { initServer } from "@ts-rest/fastify";
-import { and, asc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gte, sql } from "drizzle-orm";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { db, schema } from "./db/client";
 import { env } from "./env";
-import { router, contract, setSessionCookie, deriveLocationShort, inviteCodeMatches, userHoldsTicket, inviteAttemptsExceeded, recordInviteFail } from "./routes/router";
+import { router, contract, setSessionCookie, deriveLocationShort, inviteCodeMatches, userHoldsTicket, inviteAttemptsExceeded, recordInviteFail, isUuid } from "./routes/router";
 import { resolveSession, verifyByToken, type AuthContext } from "./auth/service";
 import { buildIcs, googleCalendarUrl } from "./lib/ics";
 import { registerOauthRoutes } from "./oauth/routes";
 import { toCsv } from "./lib/csv";
+import { buildGuestCsv } from "./lib/guest-export";
 import { buildPkpass } from "./lib/wallet/apple";
 
 declare module "fastify" {
@@ -266,6 +267,8 @@ export async function buildServer(): Promise<FastifyInstance> {
     const ctx = request.authCtx;
     if (!ctx?.admin) return reply.status(401).send({ error: "unauthorized", message: "Organizers only." });
     const { id } = request.params as { id: string };
+    // A non-uuid id reaches Postgres as a cast error and surfaces as a 500.
+    if (!isUuid(id)) return reply.status(404).send({ error: "not_found", message: "Event not found" });
     const events = await db.select().from(schema.events).where(eq(schema.events.id, id));
     const event = events[0];
     if (!event) return reply.status(404).send({ error: "not_found", message: "Event not found" });
@@ -273,77 +276,7 @@ export async function buildServer(): Promise<FastifyInstance> {
       return reply.status(403).send({ error: "forbidden", message: "Not your committee's event." });
     }
 
-    const regs = await db
-      .select({ registration: schema.registrations, user: schema.users })
-      .from(schema.registrations)
-      .innerJoin(schema.users, eq(schema.registrations.userId, schema.users.id))
-      .where(eq(schema.registrations.eventId, id))
-      .orderBy(asc(schema.registrations.createdAt));
-
-    const regIds = regs.map((r) => r.registration.id);
-    const ticketRows = regIds.length
-      ? await db.select().from(schema.tickets).where(inArray(schema.tickets.registrationId, regIds))
-      : [];
-    const ticketByReg = new Map(ticketRows.filter((t) => !t.revokedAt).map((t) => [t.registrationId, t]));
-
-    const checkinRows = regIds.length
-      ? await db
-          .select()
-          .from(schema.checkins)
-          .where(and(eq(schema.checkins.eventId, id), eq(schema.checkins.result, "ok")))
-      : [];
-    const checkinByTicket = new Map(checkinRows.map((c) => [c.ticketId, c]));
-
-    const allQuestions = await db
-      .select()
-      .from(schema.eventQuestions)
-      .where(eq(schema.eventQuestions.eventId, id))
-      .orderBy(asc(schema.eventQuestions.sort));
-    const questions = allQuestions.filter((q) => q.kind === "custom" || q.key === "phone" || q.key === "tshirt");
-    const answerRows = regIds.length
-      ? await db.select().from(schema.answers).where(inArray(schema.answers.registrationId, regIds))
-      : [];
-    const answerByRegAndQ = new Map(answerRows.map((a) => [`${a.registrationId}:${a.questionId}`, a.value]));
-
-    const headers = [
-      "Name",
-      "Andrew ID",
-      "Email",
-      "Status",
-      "Serial",
-      "Number",
-      "Major",
-      "Class year",
-      "Dietary",
-      "Resume",
-      "Source",
-      "Plus one",
-      "Checked in at",
-      "Registered at",
-      ...questions.map((q) => q.label),
-    ];
-    const rows = regs.map(({ registration: r, user: u }) => {
-      const ticket = ticketByReg.get(r.id);
-      const checkin = ticket ? checkinByTicket.get(ticket.id) : undefined;
-      return [
-        r.fullName,
-        u.andrewId ?? "",
-        u.email,
-        r.status,
-        ticket?.serial ?? "",
-        ticket?.number ?? "",
-        r.major ?? "",
-        r.classYear ?? "",
-        ((r.dietary as string[]) ?? []).join("; "),
-        r.resumeFileId ? `${env.apiUrl}/api/files/${r.resumeFileId}` : "",
-        r.source ?? "",
-        r.plusOne ? "yes" : "no",
-        checkin ? checkin.createdAt.toISOString() : "",
-        r.createdAt.toISOString(),
-        ...questions.map((q) => String(answerByRegAndQ.get(`${r.id}:${q.id}`) ?? "")),
-      ];
-    });
-
+    const { headers, rows } = await buildGuestCsv(id);
     reply.header("Content-Type", "text/csv; charset=utf-8");
     reply.header(
       "Content-Disposition",

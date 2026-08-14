@@ -17,7 +17,7 @@ import {
 } from "@scottylabs-invites/contract";
 import { db, schema } from "../db/client";
 import { env, isCmuEmail } from "../env";
-import { answerText, loadAnswers } from "../lib/answers";
+import { loadAnswers } from "../lib/answers";
 import { initialsOf, safeEqual } from "../lib/crypto";
 import { fmtStubDate } from "../lib/format";
 import { sendMail } from "../lib/mail";
