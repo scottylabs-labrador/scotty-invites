@@ -10,15 +10,27 @@ describe("contract limits stay consistent with each other", () => {
     expect(RegisterBody.safeParse({ fullName: "Jane Tartan", custom: answers(most) }).success).toBe(true);
   });
 
-  it("still rejects an absurd answer payload", () => {
+  it("accepts exactly 40 answers, the new custom-answer cap", () => {
+    expect(RegisterBody.safeParse({ fullName: "Jane Tartan", custom: answers(40) }).success).toBe(true);
+  });
+
+  it("rejects 41 answers, one past the new custom-answer cap", () => {
     expect(RegisterBody.safeParse({ fullName: "Jane Tartan", custom: answers(41) }).success).toBe(false);
   });
 
-  it("accepts required on a host question at create time", () => {
+  it("keeps required on a host question at create time", () => {
     const parsed = CreateEventBody.shape.hostQuestions.safeParse([
       { label: "GitHub handle", type: "short", required: true },
       { label: "Track", type: "select", options: ["Web", "ML"], required: false },
     ]);
     expect(parsed.success).toBe(true);
+    expect(parsed.data?.[0].required).toBe(true);
+    expect(parsed.data?.[1].required).toBe(false);
+  });
+
+  it("does not fabricate required on a host question that omits it", () => {
+    const parsed = CreateEventBody.shape.hostQuestions.safeParse([{ label: "GitHub handle", type: "short" }]);
+    expect(parsed.success).toBe(true);
+    expect(parsed.data?.[0].required).not.toBe(true);
   });
 });
