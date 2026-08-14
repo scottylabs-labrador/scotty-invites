@@ -106,6 +106,12 @@ export const Me = z.object({
       committee: Committee,
     })
     .nullable(),
+  /**
+   * Which wallet integrations have credentials configured. Env-presence only —
+   * a true here does not mean the vendor will accept the pass, so the UI must
+   * keep surfacing runtime errors.
+   */
+  wallet: z.object({ apple: z.boolean(), google: z.boolean() }),
 });
 export type Me = z.infer<typeof Me>;
 

@@ -291,8 +291,20 @@ export async function revokeSession(token: string | undefined): Promise<void> {
     .where(eq(schema.sessions.tokenHash, sha256(token)));
 }
 
+/**
+ * Env-presence only, mirroring the gates in lib/wallet/apple.ts and
+ * lib/wallet/google.ts. True does NOT mean the vendor will accept a pass:
+ * an uninvited service account or a demo-mode issuer both fail later, at
+ * Google. Two booleans are disclosed to anonymous callers of GET
+ * /api/auth/me — deliberate, and negligible.
+ */
+const WALLET = {
+  apple: Boolean(env.applePassCert && env.applePassKey && env.appleWwdrCert && env.appleTeamId),
+  google: Boolean(env.googleWalletIssuerId && env.googleWalletSaEmail && env.googleWalletSaKey),
+};
+
 export function meFor(ctx: AuthContext | null) {
-  if (!ctx) return { user: null, admin: null };
+  if (!ctx) return { user: null, admin: null, wallet: WALLET };
   return {
     user: {
       id: ctx.user.id,
@@ -313,5 +325,6 @@ export function meFor(ctx: AuthContext | null) {
           },
         }
       : null,
+    wallet: WALLET,
   };
 }
