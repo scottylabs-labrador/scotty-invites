@@ -370,6 +370,16 @@ export const OrgEventDetail = z.object({
   committee: Committee,
   /** Editable through PUT /api/org/events/:id/questions, not through PATCH. */
   questions: z.array(OrgEventQuestion),
+  /**
+   * The live, club-wide controls — not this event's snapshot. A standard
+   * question's `visible` on `OrgEventQuestion` is frozen at creation time; a
+   * super admin can switch its global control off afterward, which the public
+   * page enforces at request time but the frozen `visible` never reflects. The
+   * edit screen needs both to show "off because this event disabled it" vs.
+   * "off because it's globally disabled" instead of quietly lying about what
+   * guests actually see.
+   */
+  questionControls: QuestionControls,
   registrationCount: z.number(),
   /** Drives the edit form's warning before an organizer removes the cap. */
   waitlistCount: z.number(),

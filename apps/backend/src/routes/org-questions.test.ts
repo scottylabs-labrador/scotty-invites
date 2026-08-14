@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { asc, eq } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { db, schema } from "../db/client";
-import { createEventBody, makeCommittee, makeUser, startTestServer } from "../test/harness";
+import { createEventBody, makeCommittee, makeUser, setControlsReturningPrevious, startTestServer } from "../test/harness";
 
 let app: FastifyInstance;
 beforeAll(async () => {
@@ -56,5 +56,41 @@ describe("GET /api/org/events/:id — question DTO", () => {
     expect(custom.answerCount).toBe(1);
     expect(majorYear.answerCount).toBe(0);
     expect(body.questions.map((q) => q.sort)).toEqual([...body.questions].map((q) => q.sort).sort((a, b) => a - b));
+  });
+
+  it("surfaces the live global controls so a frozen visible:true doesn't lie about what guests see", async () => {
+    const previous = await setControlsReturningPrevious({ dietary: true });
+    try {
+      const committee = await makeCommittee();
+      const organizer = await makeUser({ admin: { committeeId: committee.id } });
+      const created = (
+        await app.inject({
+          method: "POST",
+          url: "/api/org/events",
+          headers: { cookie: organizer.cookie },
+          payload: createEventBody(committee.id, {
+            captures: { major_year: false, dietary: true, resume: false, source: false, phone: false, tshirt: false },
+          }),
+        })
+      ).json() as { id: string };
+
+      // Super admin globally disables dietary AFTER the event was created — the
+      // event's own question row still says visible: true, it's just no longer
+      // enforced for guests.
+      await setControlsReturningPrevious({ dietary: false });
+
+      const res = await app.inject({ method: "GET", url: `/api/org/events/${created.id}`, headers: { cookie: organizer.cookie } });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        questions: { key: string | null; visible: boolean }[];
+        questionControls: { dietary: boolean };
+      };
+
+      const dietary = body.questions.find((q) => q.key === "dietary")!;
+      expect(dietary.visible).toBe(true);
+      expect(body.questionControls.dietary).toBe(false);
+    } finally {
+      await setControlsReturningPrevious(previous);
+    }
   });
 });

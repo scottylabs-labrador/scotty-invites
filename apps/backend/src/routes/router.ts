@@ -953,6 +953,7 @@ export const router = s.router(contract, {
       const { event: e, committee: c } = scoped;
 
       const questions = await orgQuestions(e.id);
+      const questionControls = await getQuestionControls();
 
       const statusCounts = await db
         .select({ status: schema.registrations.status, count: sql<number>`count(*)::int` })
@@ -997,6 +998,7 @@ export const router = s.router(contract, {
           shareUrl,
           committee: committeeDto(c),
           questions,
+          questionControls,
           registrationCount,
           waitlistCount,
           deletable: registrationCount === 0,
