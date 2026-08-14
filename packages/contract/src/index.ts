@@ -37,6 +37,15 @@ export type PassStyle = z.infer<typeof PassStyle>;
 export const QuestionType = z.enum(["short", "long", "select", "file"]);
 export type QuestionType = z.infer<typeof QuestionType>;
 
+/**
+ * How many custom questions one event may carry after publishing. Registration
+ * sends one answer per answerable question (every custom question plus phone and
+ * t-shirt), so `RegisterBody.custom`'s cap must stay above this + 2 — otherwise a
+ * generous organizer makes every signup fail zod, and a zod failure reaches the
+ * guest as an unreadable body with no `message` field.
+ */
+export const MAX_CUSTOM_QUESTIONS = 34;
+
 export const STANDARD_QUESTION_KEYS = ["major_year", "dietary", "resume", "source", "phone", "tshirt"] as const;
 export const StandardQuestionKey = z.enum(STANDARD_QUESTION_KEYS);
 export type StandardQuestionKey = z.infer<typeof StandardQuestionKey>;
@@ -186,7 +195,7 @@ export const RegisterBody = z.object({
   plusOne: z.boolean().optional(),
   custom: z
     .array(z.object({ questionId: z.string().uuid(), value: z.string().max(4000) }))
-    .max(20)
+    .max(40)
     .optional(),
   inviteCode: z.string().max(64).optional(),
 });
@@ -442,6 +451,7 @@ export const CreateEventBody = z.object({
         label: z.string().min(1).max(300),
         type: QuestionType,
         options: z.array(z.string().max(120)).max(20).optional(),
+        required: z.boolean().optional(),
       }),
     )
     .max(10),

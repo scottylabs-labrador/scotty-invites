@@ -1178,6 +1178,7 @@ export const router = s.router(contract, {
           label: q.label,
           type: q.type,
           options: q.options ?? null,
+          required: q.required ?? false,
           visible: true,
           sort: sort++,
         });
