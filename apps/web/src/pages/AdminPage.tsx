@@ -203,7 +203,8 @@ export default function AdminPage() {
               <div style={{ background: "#fff", border: "1px solid var(--border)", borderRadius: 12, boxShadow: "var(--shadow-sm)", padding: "20px 24px" }}>
                 <div style={{ fontFamily: "var(--font-brand)", fontSize: 17, fontWeight: 700, color: "var(--text)" }}>Signup questions</div>
                 <div style={{ fontSize: 12, color: "var(--muted-3)", marginTop: 4 }}>
-                  The standard fields event admins can show on their forms. Turn one off and it disappears from every create flow.
+                  The standard fields event admins can offer. Turning one off hides it everywhere at once — new events can't add it, live
+                  events stop collecting it, and organizers can't switch it back on for their own event.
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", marginTop: 8 }}>
                   {Q_META.map((q) => {

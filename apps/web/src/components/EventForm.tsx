@@ -6,7 +6,7 @@ import type {
   EventAudience,
   EventCategory,
   EventModel,
-  EventQuestion,
+  OrgEventQuestion,
   PassStyle,
   QuestionControls,
   QuestionType,
@@ -16,6 +16,8 @@ import { EVENT_CATEGORIES } from "@scottylabs-invites/contract";
 import { ChevronDownIcon, ChevronUpIcon, GripIcon, LockIcon, PlusIcon, XIcon } from "./icons";
 import { GRADIENTS } from "../lib/format";
 import logo from "../assets/scottylabs-logo.svg";
+
+export { MAX_CUSTOM_QUESTIONS } from "@scottylabs-invites/contract";
 
 export interface DraftQuestion {
   /** Local React key and reorder identity. Never sent to the server. */
@@ -47,6 +49,22 @@ export function blankQuestion(existing: DraftQuestion[]): DraftQuestion {
     required: false,
     visible: true,
     answerCount: 0,
+  };
+}
+
+/** A server question becomes a builder row. `id` is positional and local only. */
+export function toDraftQuestion(q: OrgEventQuestion, index: number): DraftQuestion {
+  return {
+    id: index + 1,
+    qid: q.id,
+    kind: q.kind,
+    key: q.key,
+    text: q.label,
+    type: q.type,
+    options: q.options ?? [],
+    required: q.required,
+    visible: q.visible,
+    answerCount: q.answerCount,
   };
 }
 
@@ -465,12 +483,12 @@ export interface EventFormProps {
   myCommittee?: Committee | null;
   isSuper: boolean;
   controls?: QuestionControls;
-  /** Edit mode: the event's live questions, shown read-only (PATCH can't change them). */
-  existingQuestions?: EventQuestion[];
   /** Slot under the Registration card — the invite-link panel on the edit screen. */
   registrationExtra?: React.ReactNode;
   /** Slot at the bottom of the left column — the danger zone on the edit screen. */
   footerExtra?: React.ReactNode;
+  /** Edit mode: the Save questions button, which posts to its own endpoint. */
+  questionsActions?: React.ReactNode;
   /** Slot under the pass preview — publish button, or save/cancel. */
   railActions: React.ReactNode;
 }
@@ -489,9 +507,9 @@ export default function EventForm({
   myCommittee,
   isSuper,
   controls,
-  existingQuestions,
   registrationExtra,
   footerExtra,
+  questionsActions,
   railActions,
 }: EventFormProps) {
   const set = <K extends keyof EventFormValues>(key: K, value: EventFormValues[K]) => onChange({ ...v, [key]: value });
@@ -658,32 +676,55 @@ export default function EventForm({
           {registrationExtra}
         </Card>
 
-        {isEdit ? (
-          <Card title="Signup questions" sub="Fixed after publishing — guests who already answered would be left with orphaned responses.">
-            <div style={{ display: "flex", flexDirection: "column", marginTop: 10 }}>
-              {(existingQuestions ?? []).filter((q) => q.kind === "custom" || q.key).length === 0 && (
-                <div style={{ fontSize: 12.5, color: "var(--muted-3)", padding: "8px 0" }}>Name and andrew ID only.</div>
-              )}
-              {(existingQuestions ?? []).map((q) => (
-                <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 2px", borderBottom: "1px solid var(--border-subtle)" }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text)" }}>{q.label}</span>
-                  <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted-3)" }}>
-                    {q.kind === "custom" ? "your question" : "standard"} · {TYPE_LABELS[q.type].toLowerCase()}
-                  </span>
-                </div>
-              ))}
+        <Card
+          title="Data to capture"
+          sub={
+            isEdit
+              ? "Switching one off hides it from the signup form immediately. Answers already collected are kept."
+              : "Andrew ID and name come free with andrew sign-in. Ask only for what this event needs."
+          }
+        >
+          <div style={{ display: "flex", flexDirection: "column", marginTop: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 2px", borderBottom: "1px solid var(--border-subtle)", opacity: 0.65 }}>
+              <Switch on />
+              <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text)" }}>Andrew ID + name</span>
+              <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted-3)" }}>always on</span>
             </div>
-          </Card>
-        ) : (
-          <>
-            <Card title="Data to capture" sub="Andrew ID and name come free with andrew sign-in. Ask only for what this event needs.">
-              <div style={{ display: "flex", flexDirection: "column", marginTop: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 2px", borderBottom: "1px solid var(--border-subtle)", opacity: 0.65 }}>
-                  <Switch on />
-                  <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text)" }}>Andrew ID + name</span>
-                  <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted-3)" }}>always on</span>
-                </div>
-                {captureDefs.map((c) => (
+
+            {isEdit
+              ? // Edit mode reads the event's OWN standard rows, not the global
+                // control list: a key the super admin has since switched off
+                // club-wide still shows here, disabled, so the organizer can see
+                // why the field vanished instead of it silently disappearing.
+                v.questions
+                  .filter((q) => q.kind === "standard")
+                  .map((q) => {
+                    const globallyOff = !!q.key && !!controls && !controls[q.key];
+                    return (
+                      <button
+                        key={q.id}
+                        disabled={globallyOff}
+                        onClick={() =>
+                          set(
+                            "questions",
+                            v.questions.map((x) => (x.id === q.id ? { ...x, visible: !x.visible } : x)),
+                          )
+                        }
+                        style={{ all: "unset", cursor: globallyOff ? "default" : "pointer", display: "flex", alignItems: "center", gap: 12, padding: "11px 2px", borderBottom: "1px solid var(--border-subtle)", opacity: globallyOff ? 0.55 : 1 }}
+                      >
+                        <Switch on={q.visible && !globallyOff} />
+                        <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text)" }}>{q.text}</span>
+                        <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted-3)" }}>
+                          {globallyOff
+                            ? "off club-wide"
+                            : q.answerCount > 0
+                              ? `${q.answerCount} ${q.answerCount === 1 ? "answer" : "answers"}`
+                              : "standard field"}
+                        </span>
+                      </button>
+                    );
+                  })
+              : captureDefs.map((c) => (
                   <button
                     key={c.key}
                     onClick={() => set("captures", { ...v.captures, [c.key]: !v.captures[c.key] })}
@@ -694,12 +735,15 @@ export default function EventForm({
                     <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted-3)" }}>{c.note}</span>
                   </button>
                 ))}
-              </div>
-            </Card>
+          </div>
+        </Card>
 
-            <QuestionsCard questions={v.questions} onChange={(next) => set("questions", next)} isEdit={false} />
-          </>
-        )}
+        <QuestionsCard
+          questions={v.questions}
+          onChange={(next) => set("questions", next)}
+          isEdit={isEdit}
+          actions={questionsActions}
+        />
 
         <Card title="Updates & contact" sub="Status emails go out via Mailgun. Every invite shows a contact.">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginTop: 14 }}>
