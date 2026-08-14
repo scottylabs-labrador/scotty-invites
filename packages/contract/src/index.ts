@@ -145,6 +145,21 @@ export const EventQuestion = z.object({
 });
 export type EventQuestion = z.infer<typeof EventQuestion>;
 
+/**
+ * The organizer's view of a question. Three fields the public page must never
+ * carry: whether the question is switched on for this event, where it sits, and
+ * how many people have already answered it — which is what freezes its type and
+ * options. Widening `EventQuestion` itself would leak all three into the public
+ * `EventDetail`, so this extends it instead, the same way `deletable` is a
+ * server-computed affordance on `OrgEventDetail`.
+ */
+export const OrgEventQuestion = EventQuestion.extend({
+  visible: z.boolean(),
+  sort: z.number(),
+  answerCount: z.number(),
+});
+export type OrgEventQuestion = z.infer<typeof OrgEventQuestion>;
+
 export const EventDetail = z.object({
   id: z.string(),
   shortCode: z.string(),
@@ -353,8 +368,8 @@ export const OrgEventDetail = z.object({
   /** Full shareable URL — carries ?code= for invite-only events. */
   shareUrl: z.string(),
   committee: Committee,
-  /** Read-only on this screen: PATCH cannot change captures or host questions. */
-  questions: z.array(EventQuestion),
+  /** Editable through PUT /api/org/events/:id/questions, not through PATCH. */
+  questions: z.array(OrgEventQuestion),
   registrationCount: z.number(),
   /** Drives the edit form's warning before an organizer removes the cap. */
   waitlistCount: z.number(),

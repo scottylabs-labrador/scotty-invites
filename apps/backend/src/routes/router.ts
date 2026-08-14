@@ -12,6 +12,7 @@ import {
   type PendingItem,
   type Dashboard,
   type AdminRow,
+  type OrgEventQuestion,
 } from "@scottylabs-invites/contract";
 import { db, schema } from "../db/client";
 import { env, isCmuEmail } from "../env";
@@ -215,6 +216,41 @@ async function buildGuestRows(eventId: string): Promise<{ guests: GuestRow[]; re
     };
   });
   return { guests, regs: rows.map((r) => r.registration) };
+}
+
+/** Every question on an event, in sort order, with the answer count that locks it. */
+async function orgQuestions(eventId: string): Promise<OrgEventQuestion[]> {
+  const rows = await db
+    .select()
+    .from(schema.eventQuestions)
+    .where(eq(schema.eventQuestions.eventId, eventId))
+    .orderBy(asc(schema.eventQuestions.sort));
+  if (rows.length === 0) return [];
+
+  const counts = await db
+    .select({ questionId: schema.answers.questionId, count: sql<number>`count(*)::int` })
+    .from(schema.answers)
+    .where(
+      inArray(
+        schema.answers.questionId,
+        rows.map((q) => q.id),
+      ),
+    )
+    .groupBy(schema.answers.questionId);
+  const countById = new Map(counts.map((c) => [c.questionId, c.count]));
+
+  return rows.map((q) => ({
+    id: q.id,
+    kind: q.kind,
+    key: (q.key as OrgEventQuestion["key"]) ?? null,
+    label: q.label,
+    type: q.type,
+    options: q.options ?? null,
+    required: q.required,
+    visible: q.visible,
+    sort: q.sort,
+    answerCount: countById.get(q.id) ?? 0,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -916,11 +952,7 @@ export const router = s.router(contract, {
       if (scoped === "forbidden") return forbidden;
       const { event: e, committee: c } = scoped;
 
-      const questions = await db
-        .select()
-        .from(schema.eventQuestions)
-        .where(eq(schema.eventQuestions.eventId, e.id))
-        .orderBy(asc(schema.eventQuestions.sort));
+      const questions = await orgQuestions(e.id);
 
       const statusCounts = await db
         .select({ status: schema.registrations.status, count: sql<number>`count(*)::int` })
@@ -964,15 +996,7 @@ export const router = s.router(contract, {
           inviteCode: e.inviteCode,
           shareUrl,
           committee: committeeDto(c),
-          questions: questions.map((q) => ({
-            id: q.id,
-            kind: q.kind,
-            key: (q.key as EventDetail["questions"][number]["key"]) ?? null,
-            label: q.label,
-            type: q.type,
-            options: q.options ?? null,
-            required: q.required,
-          })),
+          questions,
           registrationCount,
           waitlistCount,
           deletable: registrationCount === 0,
