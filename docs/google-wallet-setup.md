@@ -41,11 +41,16 @@ substitute an EC/P-256 key it will sign **without any local error** while the ap
 still says `alg: RS256` — the signature comes out 95 characters instead of ~342 and Google rejects
 the save with nothing in this app's logs. Sanity-check with:
 
+Export the value in your shell first — step 6 sets it in `.env` and Railway, but this check runs
+before that:
+
 ```bash
+export GOOGLE_WALLET_SA_KEY_PEM='-----BEGIN PRIVATE KEY-----\nMIIEvQ...\n-----END PRIVATE KEY-----\n'
 openssl pkey -in <(printf '%b' "$GOOGLE_WALLET_SA_KEY_PEM") -noout -text | head -1
 ```
 
-Expect `RSA Private-Key: (2048 bit, 2 primes)` or similar — not `EC`.
+Expect `RSA Private-Key: (2048 bit, 2 primes)` or similar — not `EC`. An empty result means the
+variable is unset, not that the key is bad.
 
 ## 3. Authorise the service account on the issuer — THE STEP THAT IS ALWAYS MISSED
 

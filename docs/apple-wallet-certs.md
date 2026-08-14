@@ -117,8 +117,14 @@ Set `APPLE_PASS_CERT_PEM`, `APPLE_PASS_KEY_PEM`, `APPLE_WWDR_CERT_PEM` and `APPL
 
 ## 9. Verify
 
+The pass route requires a signed-in session, so this needs your own session cookie. Sign in at
+`https://invite.scottylabs.org/signin`, then copy the value of the `sl_invites_session` cookie
+from your browser's dev tools (Application → Cookies). Without it the route returns
+`401 {"error":"unauthorized","message":"Sign in first."}`, which is a missing cookie, not a
+certificate problem.
+
 ```bash
-curl -sS -b "session=<your cookie>" \
+curl -sS -b "sl_invites_session=<your cookie>" \
   https://invite.scottylabs.org/api/tickets/<ticket-id>/apple.pkpass -o test.pkpass
 unzip -l test.pkpass
 ```
