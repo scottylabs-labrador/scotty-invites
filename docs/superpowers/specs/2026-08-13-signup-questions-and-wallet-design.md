@@ -64,8 +64,10 @@ sends.
   from `options`, `file` → uploader. All of these submit through `RegisterBody.custom`, which
   the backend already validates for exactly this set.
 
-Standard questions carry `sort` 0–5 and custom questions follow, so existing events render in
-the order they render today.
+Standard questions carry `sort` 0–5 and custom questions follow. This is *not* order-preserving
+for existing events: today "How did you hear about this?" renders *after* the host questions
+(`EventPage.tsx:448`), and sorted order moves it above them. That reordering is accepted — the
+sorted order is the one the organizer sees in the builder, and the two must agree.
 
 ### The builder gains the controls it implies
 
@@ -86,7 +88,7 @@ reconciles against what exists:
 | Change | Question has answers | Question has no answers |
 | --- | --- | --- |
 | Label, order, `required`, `visible` | allowed | allowed |
-| `type`, `options` | rejected (409) | allowed |
+| `type`, `options` | rejected — 409 `locked`, newly declared on this route | allowed |
 | Delete | becomes hide — `visible = false` | real delete |
 | Add new question | allowed | allowed |
 
@@ -95,6 +97,26 @@ options are ours, not the organizer's. This has the useful side effect of making
 capture" toggles editable after publish, which they are not today.
 
 Hidden questions keep their answers, and keep their CSV column, so hiding is never lossy.
+
+The organizer screen needs three fields the public one must never carry — `visible`, `sort`,
+and an answer count for the lock badges. Widening the shared `EventQuestion` would leak them
+into the public `EventDetail`, so the org payload gets its own `OrgEventQuestion` extension,
+following the precedent already set by the server-computed `deletable` flag.
+
+### Two privacy gates that hiding must actually close
+
+Making `visible` editable exposes two latent holes, and shipping the toggle without closing
+them would be a privacy misrepresentation — a switch labelled "hide" that keeps collecting.
+
+1. The register handler decides which answers to keep from the question's `visible` flag alone
+   (`router.ts:447-455`), never consulting the super admin's global controls the public page
+   applies (`router.ts:368`). An organizer could re-enable collection of a field the super
+   admin globally disabled. The PUT refuses `visible: true` for a standard key whose global
+   control is off, and the register handler adopts the public page's predicate.
+2. The four bespoke values are gated on the global controls only (`router.ts:483-487`), never
+   on the event's own question rows. Hiding "Resume upload" would stop the field rendering
+   while the server kept storing `resume_file_id`. Those four are gated on the event's rows
+   too.
 
 ### Server-side validation
 
@@ -109,8 +131,11 @@ cancelled registration (`router.ts:469` documents that ordering constraint):
 
 ### File answers
 
-A file question stores the file's UUID as its answer value; `files.kind` distinguishes an
-answer upload from a resume. The guest uploader reuses `POST /api/files` unchanged.
+A file question stores the file's UUID as its answer value, lower-cased so the organizer's
+download link matches the strict lower-case UUID pattern `GET /api/files/:id` enforces.
+`POST /api/files` gains an optional `kind` field so an answer upload is distinguishable from a
+resume; its accepted MIME types stay PDF/Word, and the builder says so, rather than widening
+uploads in a change nobody asked for.
 
 `GET /api/files/:id` extends its committee-admin branch: a file is also readable when its
 UUID appears as an answer to a question belonging to an event of that admin's committee. The
@@ -127,13 +152,21 @@ not an improvement.
 
 ### Wallet
 
-**Google — credentials, not code.** The implementation is a correct fat Save-to-Wallet JWT
-and needs three environment variables. The reported permissions error is Google's, and comes
-from one of two places: the service account has not been granted access to the Issuer account
-in the Wallet Console's Users tab, or the issuer is still in demo mode, where only allowlisted
-test accounts may save a pass. Both are console steps, documented as a runbook. The only code
-change is wrapping the signing call so a malformed key returns an actionable 503 rather than
-a 500.
+**Google — credentials *and* a code fix.** The reported permissions error is Google's, and
+comes from one of two console omissions: the service account has not been granted access to the
+Issuer account in the Wallet Console's Users tab, or the issuer is still in demo mode, where
+only allowlisted test accounts may save a pass. Both are documented as a runbook.
+
+But credentials alone are not enough. The current implementation embeds the whole
+`EventTicketClass` and `EventTicketObject` in the JWT ("fat" JWT), and the resulting save URL
+measures ~1,980–2,170 characters against Google's ~1,800-character guidance — over the limit
+for *every* event, not just long ones. So the pass moves to the shape Google prescribes: the
+`EventTicketClass` is created once per event through the Wallet REST API, and the save link
+carries a skinny object-only JWT (~800 characters). That needs a service-account access token,
+obtained with the JWT-bearer grant the codebase can already sign.
+
+The signing call is also wrapped so a malformed PEM returns an actionable 503 instead of a 500
+— and the identical defect on the Apple path is fixed at the same time.
 
 **Apple — code now, certificates later.** ScottyLabs has no Apple Developer Program
 membership, so passes cannot be signed yet. The bundle is fixed now so that the day the
@@ -142,9 +175,24 @@ and the manifest, and `webServiceURL` + `authenticationToken` are removed becaus
 `/api/passes` does not exist. A test asserts the bundle's contents. The certificate runbook
 is written down for later.
 
-**Honest UI.** `/api/me` carries `wallet: { apple: boolean, google: boolean }`. The Apple
+**Honest UI.** The `Me` contract — served by `GET /api/auth/me` *and* returned by
+`POST /api/auth/verify` — carries `wallet: { apple: boolean, google: boolean }`. The Apple
 button renders disabled with "coming soon" when unconfigured, instead of being a button that
-errors when pressed.
+errors when pressed. The flag is env-presence only: a Google issuer that hasn't invited the
+service account still fails at Google, so the inline error note stays the real feedback channel
+and the Google button stays enabled whenever the flag is true.
+
+Three places currently assert that wallet passes work and must stop: the ticket email
+(`emails.ts:129`), the README's wallet section, and the tickets page.
+
+### One shared value normalizer
+
+`answers.value` is `jsonb`, and Drizzle's mapper `JSON.parse`s a string that `pg-types` has
+already parsed. A stored `"4125551234"` therefore comes back as the *number* `4125551234`, a
+stored `"null"` as `null`, and `String(value ?? "")` renders that last one as an empty cell.
+Phone — the field this change makes collectable for the first time — is exactly the case that
+stops being a string. One `answerText(value)` helper is shared by the dashboard, the CSV export
+and MCP so the three surfaces cannot disagree.
 
 ## Out of scope
 
@@ -152,6 +200,14 @@ errors when pressed.
 - Apple pass push updates — the `/api/passes` web service and its APNs credential
 - Multiple files per answer
 - Guest-list pagination
+- **Questions for claimed +1 guests.** `claimTransfer` issues a ticket with no registration
+  (`registrations.ts:405`), so a +1 guest is never asked a question, never appears in the guest
+  table, and is absent from the CSV. Marking a question required will therefore still yield
+  nothing for +1s. This is pre-existing and stays pre-existing; it is recorded here so nobody
+  reads "required" as a guarantee.
+- **Backfilling existing events.** `visible` is frozen at create (`router.ts:1169`), so every
+  event that exists today has `phone`/`tshirt` rows hidden. They are not switched on by a
+  migration — organizers turn them on per event through the new PUT.
 
 ## Decisions taken
 
