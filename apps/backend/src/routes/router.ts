@@ -441,28 +441,78 @@ export const router = s.router(contract, {
         return { status: 409, body: { error: "already_registered", message: "You already signed up for this one." } };
       }
 
-      // Validate custom answers against this event's questions. Dedupe by
-      // questionId so a repeated id in the payload can't trip the answers
-      // unique index (which would otherwise 500 mid-write).
+      // The global question controls gate the public form (see the events.get
+      // handler), so they gate what we accept too — otherwise an organizer could
+      // restore collection of a field a super admin switched off club-wide. This
+      // read used to happen further down, AFTER the destructive block; it has to
+      // be here, because required-enforcement needs it.
+      const controls = await getQuestionControls();
+
+      // Everything from here to the destructive block below is validation. A 400
+      // returned after that block deletes a returning guest's prior registration
+      // and unlinks their ticket with nothing recreated, so nothing below may fail.
       const questions = await db
         .select()
         .from(schema.eventQuestions)
-        .where(and(eq(schema.eventQuestions.eventId, event.id), eq(schema.eventQuestions.visible, true)));
-      const questionById = new Map(questions.map((q) => [q.id, q]));
-      const seenQ = new Set<string>();
-      const customAnswers = (body.custom ?? []).filter((a) => {
-        const q = questionById.get(a.questionId);
-        const answerable = q && (q.kind === "custom" || q.key === "phone" || q.key === "tshirt");
-        if (!answerable || a.value.trim().length === 0 || seenQ.has(a.questionId)) return false;
-        seenQ.add(a.questionId);
-        return true;
-      });
+        .where(and(eq(schema.eventQuestions.eventId, event.id), eq(schema.eventQuestions.visible, true)))
+        .orderBy(asc(schema.eventQuestions.sort));
 
-      // Validate resume ownership BEFORE any destructive mutation.
-      if (body.resumeFileId) {
-        const file = await db.select().from(schema.files).where(eq(schema.files.id, body.resumeFileId));
-        if (!file[0] || file[0].ownerUserId !== ctx.user.id) {
-          return { status: 400, body: { error: "bad_file", message: "That resume upload doesn't belong to you." } };
+      // Fold the payload down first: blanks never occupy a slot, last non-blank
+      // wins, and one entry per question satisfies the answers unique index.
+      const submitted = new Map<string, string>();
+      for (const a of body.custom ?? []) {
+        const trimmed = a.value.trim();
+        if (trimmed.length > 0) submitted.set(a.questionId, trimmed);
+      }
+
+      // Iterate the questions, not the payload: an id that is no longer answerable
+      // (hidden, deleted, or another event's) is ignored rather than rejected, so a
+      // form left open while the organizer edits the questions still submits.
+      const customAnswers: { questionId: string; value: string }[] = [];
+      const fileAnswerIds: string[] = [];
+      for (const q of questions) {
+        if (q.kind !== "custom" && !(q.key && controls[q.key as keyof QuestionControls])) continue;
+        // major_year / dietary / resume / source arrive in their own body fields.
+        if (q.kind === "standard" && q.key !== "phone" && q.key !== "tshirt") continue;
+
+        const value = submitted.get(q.id);
+        if (!value) {
+          if (q.required) {
+            return { status: 400, body: { error: "answer_required", message: `“${q.label}” is required.` } };
+          }
+          continue;
+        }
+        if (q.type === "select" && (q.options ?? []).length > 0 && !(q.options ?? []).includes(value)) {
+          return { status: 400, body: { error: "answer_option", message: `Pick one of the listed options for “${q.label}”.` } };
+        }
+        if (q.type === "file") {
+          if (!isUuid(value)) {
+            return { status: 400, body: { error: "answer_file", message: `Upload a file for “${q.label}” before submitting.` } };
+          }
+          // Lower-cased at write time: GET /api/files/:id matches lower-case only,
+          // so an upper-case answer would produce an organizer link that 404s.
+          const fileId = value.toLowerCase();
+          fileAnswerIds.push(fileId);
+          customAnswers.push({ questionId: q.id, value: fileId });
+          continue;
+        }
+        customAnswers.push({ questionId: q.id, value });
+      }
+
+      // Validate every referenced upload BEFORE any destructive mutation. One
+      // projected query covers the resume and all file answers; the old check
+      // selected the whole row and dragged a 5 MB bytea into memory to read one
+      // column.
+      const referenced = [
+        ...new Set([...(body.resumeFileId ? [body.resumeFileId.toLowerCase()] : []), ...fileAnswerIds]),
+      ];
+      if (referenced.length > 0) {
+        const owned = await db
+          .select({ id: schema.files.id })
+          .from(schema.files)
+          .where(and(inArray(schema.files.id, referenced), eq(schema.files.ownerUserId, ctx.user.id)));
+        if (owned.length !== referenced.length) {
+          return { status: 400, body: { error: "bad_file", message: "That upload doesn't belong to you." } };
         }
       }
 
@@ -475,7 +525,6 @@ export const router = s.router(contract, {
 
       await db.update(schema.users).set({ name: body.fullName }).where(eq(schema.users.id, ctx.user.id));
 
-      const controls = await getQuestionControls();
       const outcome = await createRegistration({
         event,
         user: ctx.user,
