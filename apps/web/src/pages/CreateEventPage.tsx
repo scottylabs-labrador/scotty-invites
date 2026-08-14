@@ -4,7 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, unwrap } from "../lib/api";
 import { useAuth } from "../lib/auth";
 import { AppFooter, AppHeader, Spinner } from "../components/AppShell";
-import EventForm, { asCategory, emptyEventForm, validateEventForm, type EventFormValues } from "../components/EventForm";
+import EventForm, { asCategory, emptyEventForm, validateEventForm, validateQuestions, type EventFormValues } from "../components/EventForm";
 import { CheckIcon, LinkIcon } from "../components/icons";
 import { nyWallClockToUtc } from "../lib/format";
 
@@ -37,7 +37,7 @@ export default function CreateEventPage() {
 
   const publish = useMutation({
     mutationFn: async () => {
-      const problem = validateEventForm(values);
+      const problem = validateEventForm(values) ?? validateQuestions(values.questions);
       if (problem) throw new Error(problem);
       const startAt = nyWallClockToUtc(values.date, values.startTime);
       let endAt = nyWallClockToUtc(values.date, values.endTime);
@@ -62,7 +62,14 @@ export default function CreateEventPage() {
             phone: values.captures.phone,
             tshirt: values.captures.tshirt,
           },
-          hostQuestions: values.questions.filter((q) => q.text.trim()).map((q) => ({ label: q.text.trim(), type: q.type })),
+          hostQuestions: values.questions
+            .filter((q) => q.kind === "custom" && q.text.trim())
+            .map((q) => ({
+              label: q.text.trim(),
+              type: q.type,
+              options: q.type === "select" ? q.options.map((o) => o.trim()).filter(Boolean) : undefined,
+              required: q.required,
+            })),
           artwork: values.artwork,
           passStyle: values.passStyle,
           stampCommittee: values.stampCommittee,
