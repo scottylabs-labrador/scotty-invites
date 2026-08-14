@@ -7,8 +7,10 @@ import { db, schema } from "../../db/client";
  *
  * passStyle is deliberately widened to `string`: the Drizzle column type
  * (schema.ts:114) is a TypeScript-only union, not a Postgres CHECK, so a third
- * value is representable. Both builders therefore use the same
- * `passStyle !== "light"` predicate — see Global Constraints.
+ * value is representable. Every surface that renders a pass therefore uses the
+ * same `passStyle !== "light"` predicate — pass-bundle.ts, google-pass.ts, and
+ * the two web previews in TicketsPage.tsx and EventForm.tsx — so an off-union
+ * value can never render dark in one place and light in another.
  */
 export interface PassRow {
   ticket: { id: string; serial: string; number: number; kind: string };
