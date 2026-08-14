@@ -131,20 +131,31 @@ export default function EditEventPage() {
     mutationFn: async (v: EventFormValues) => {
       const problem = validateQuestions(v.questions, MAX_CUSTOM_QUESTIONS);
       if (problem) throw new Error(problem);
+      const controls = committeesQuery.data?.questionControls;
       return unwrap(
         await api.org.updateQuestions({
           params: { id },
           body: {
             questions: v.questions
               .filter((q) => q.kind === "standard" || q.text.trim())
-              .map((q) => ({
-                id: q.qid ?? undefined,
-                label: q.text.trim(),
-                type: q.type,
-                options: q.type === "select" ? q.options.map((o) => o.trim()).filter(Boolean) : undefined,
-                required: q.required,
-                visible: q.visible,
-              })),
+              .map((q) => {
+                // Same `globallyOff` check EventForm's "Data to capture" row uses to
+                // disable this row's own toggle. A standard row can carry a stale
+                // `visible: true` from before a super admin switched its control off
+                // club-wide — the organizer has no way to flip it, since the toggle
+                // is disabled precisely when this is true. Sending it verbatim would
+                // 400 the whole PUT on a field the organizer can neither see nor
+                // touch, permanently blocking every future save on the event.
+                const globallyOff = !!q.key && !!controls && !controls[q.key];
+                return {
+                  id: q.qid ?? undefined,
+                  label: q.text.trim(),
+                  type: q.type,
+                  options: q.type === "select" ? q.options.map((o) => o.trim()).filter(Boolean) : undefined,
+                  required: q.required,
+                  visible: q.visible && !globallyOff,
+                };
+              }),
           },
         }),
         200,
