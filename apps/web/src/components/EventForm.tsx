@@ -139,13 +139,12 @@ function questionCountProblem(questions: DraftQuestion[], maxCustom: number): st
  * question COUNT — and deliberately not the per-row question rules.
  *
  * This runs on the edit screen too (EditEventPage's `save`), where the request it
- * guards is `PATCH /api/org/events/:id` — and `UpdateEventBody` cannot carry
- * questions at all (packages/contract/src/index.ts:459). Every custom `select` in
- * the database today has `options: null`, because `CreateEventPage.tsx:65` has
- * never sent options, and `toDraftQuestion` (Task 9) maps that to `options: []`.
- * A "select needs at least one option" rule here would therefore refuse to let an
- * organizer fix a typo in the title of any such event, over a payload the request
- * does not even send. Question rules belong to the thing that saves questions.
+ * guards is `PATCH /api/org/events/:id` — and `UpdateEventBody` omits `captures`
+ * and `hostQuestions` entirely (packages/contract/src/index.ts:505), so it cannot
+ * carry questions at all. A "select needs at least one option" rule here would
+ * therefore run against a payload the request never sends, and could refuse to
+ * let an organizer fix a typo in the title of an otherwise-unrelated event.
+ * Question rules belong to the thing that saves questions.
  */
 export function validateEventForm(v: EventFormValues, opts: { maxCustomQuestions?: number } = {}): string | null {
   if (!v.title.trim()) return "Give the event a name.";
@@ -157,8 +156,8 @@ export function validateEventForm(v: EventFormValues, opts: { maxCustomQuestions
 
 /**
  * The full question rules, run by whatever is about to SEND questions: the create
- * screen's Publish (which posts `hostQuestions`) and, from Task 9, the edit
- * screen's Save questions button (which PUTs the whole list).
+ * screen's Publish (which posts `hostQuestions`) and the edit screen's Save
+ * questions button (which PUTs the whole list).
  * Standard rows are skipped: `major_year`, `dietary` and `source` really are
  * stored as type "select" with no options, and a blanket rule would trip on
  * every event that exists.
@@ -506,8 +505,10 @@ export interface EventFormProps {
 /**
  * The event form shared by Create and Edit. Both screens render the same cards
  * from the same state shape so they can't drift; `mode` only gates the fields
- * the API genuinely treats differently (committee and the question set are
- * fixed once an event exists, because PATCH cannot change them).
+ * the API genuinely treats differently — the committee is fixed once an event
+ * exists. The question set is no longer one of those: edit mode's own "Save
+ * questions" button (`questionsActions`) sends it through its own endpoint,
+ * separate from the scalar PATCH this form's primary save button drives.
  */
 export default function EventForm({
   mode,

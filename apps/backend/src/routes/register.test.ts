@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import type { FastifyInstance } from "fastify";
 import { db, schema } from "../db/client";
 import { createEventBody, makeCommittee, makeUser, setControlsReturningPrevious, startTestServer } from "../test/harness";
@@ -155,7 +155,17 @@ describe("POST /api/events/:code/register — answer validation", () => {
       expect(answers).toHaveLength(1);
       expect(answers[0].questionId).toBe(phone.id);
       // Stored trimmed — an untrimmed value would fail any later options check.
-      expect(String(answers[0].value)).toBe("4125551234");
+      // Assert on the raw stored text, not `answers[0].value`: pg auto-parses the
+      // jsonb column and drizzle re-parses the result on top of that, and
+      // JSON.parse strips surrounding whitespace from a numeric literal on its
+      // own — so a numeric-looking string like this phone number round-trips to
+      // the same value whether or not router.ts's own `.trim()` ever ran. Casting
+      // to text in SQL reads what Postgres actually has on disk.
+      const raw = await db
+        .select({ valueText: sql<string>`${schema.answers.value}::text` })
+        .from(schema.answers)
+        .where(eq(schema.answers.registrationId, registrationId));
+      expect(raw[0].valueText).toBe('"4125551234"');
     } finally {
       // `before` is the PRE-patch snapshot, so this really does put the shared
       // app_settings row back the way the next test file expects to find it.

@@ -122,7 +122,6 @@ function EventBody({ detail, inviteCode }: { detail: EventDetail; inviteCode: st
 
   const showMajorYear = detail.questions.some((q) => q.key === "major_year");
   const showDietary = detail.questions.some((q) => q.key === "dietary");
-  const showResume = detail.questions.some((q) => q.key === "resume");
   const showSource = detail.questions.some((q) => q.key === "source");
   /**
    * Everything that submits through RegisterBody.custom: host questions plus the

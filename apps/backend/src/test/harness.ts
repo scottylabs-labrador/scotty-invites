@@ -95,9 +95,9 @@ export function multipartUpload(filename: string, contentType: string, data: Buf
  * restore a no-op: `setControls({phone:true})` would report `phone: true` as the
  * "previous" value, the finally block would re-set it to true, and the control
  * would stay on for every test file that runs after this one — which is exactly
- * how Task 8's `refuses to switch on a standard field the club has disabled`
- * would start returning 200 instead of 400. Sequential files, one database: that
- * is a deterministic failure, not a flake.
+ * how org-questions.test.ts's `refuses to switch on a standard field the club
+ * has disabled` would start returning 200 instead of 400. Sequential files, one
+ * database: that is a deterministic failure, not a flake.
  */
 export async function setControlsReturningPrevious(patch: Partial<QuestionControls>): Promise<QuestionControls> {
   const before = await getQuestionControls();

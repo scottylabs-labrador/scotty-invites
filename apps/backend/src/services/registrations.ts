@@ -111,6 +111,29 @@ export async function createRegistration(opts: {
   const outcome = await db.transaction(async (tx) => {
     await lockEvent(tx, event.id);
 
+    // The register handler reads `event_questions` (and validates against it)
+    // BEFORE this lock is taken. An organizer's questions PUT can hard-delete an
+    // unanswered custom question in between — the one destructive path in this
+    // codebase that removes a live event_questions row (router.ts's
+    // updateQuestions, holding the same lock). Inserting an answer for an id
+    // that's gone by the time we get here is an FK violation, not a 500 we
+    // should ever let happen: dropping that one answer is the correct outcome,
+    // same as the caller dropping an answer for a question it never asked.
+    const customAnswers =
+      opts.customAnswers.length === 0
+        ? opts.customAnswers
+        : await (async () => {
+            const surviving = new Set(
+              (
+                await tx
+                  .select({ id: schema.eventQuestions.id })
+                  .from(schema.eventQuestions)
+                  .where(eq(schema.eventQuestions.eventId, event.id))
+              ).map((r) => r.id),
+            );
+            return opts.customAnswers.filter((a) => surviving.has(a.questionId));
+          })();
+
     const status: "approved" | "pending" | "waitlisted" = await (async () => {
       if (event.model === "approval") return "pending";
       if (event.capacity !== null) {
@@ -138,9 +161,9 @@ export async function createRegistration(opts: {
       .returning();
     const registration = inserted[0];
 
-    if (opts.customAnswers.length > 0) {
+    if (customAnswers.length > 0) {
       await tx.insert(schema.answers).values(
-        opts.customAnswers.map((a) => ({
+        customAnswers.map((a) => ({
           registrationId: registration.id,
           questionId: a.questionId,
           value: a.value as unknown,

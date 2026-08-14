@@ -33,7 +33,7 @@ const RESUME_TYPES = new Set([
 ]);
 
 export async function buildServer(): Promise<FastifyInstance> {
-  const app = Fastify({ logger: { level: env.isProd ? "info" : "info" }, trustProxy: true, bodyLimit: 6 * 1024 * 1024 });
+  const app = Fastify({ logger: { level: env.logLevel }, trustProxy: true, bodyLimit: 6 * 1024 * 1024 });
 
   await app.register(cookie);
   await app.register(formbody);

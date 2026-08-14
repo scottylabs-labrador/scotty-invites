@@ -34,6 +34,10 @@ export const env = {
   isProd: (process.env.NODE_ENV ?? "development") === "production",
   appMode: (process.env.APP_MODE ?? "api") as "api" | "mcp",
   port,
+  /** Fastify/pino log level. Tests set this to "silent" (see vitest.config.ts) so
+   *  the two JSON lines per request, and the full stack the error handler logs
+   *  for every deliberately-provoked 4xx, don't bury the actual test output. */
+  logLevel: process.env.LOG_LEVEL ?? "info",
   databaseUrl: required("DATABASE_URL"),
   databaseSsl: process.env.DATABASE_SSL === "1",
   /** Public origin of the web app (used in emails, transfer links, redirects). */

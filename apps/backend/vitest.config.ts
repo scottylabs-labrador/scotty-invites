@@ -7,5 +7,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     fileParallelism: false,
+    // Fastify logs two JSON lines per request at "info", and the global error
+    // handler logs a full stack for every deliberately-provoked 4xx — of which
+    // this suite has many. Silenced here, not by changing the default in
+    // src/env.ts, so production logging is untouched.
+    env: { LOG_LEVEL: "silent" },
   },
 });
