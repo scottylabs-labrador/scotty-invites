@@ -37,6 +37,15 @@ export type PassStyle = z.infer<typeof PassStyle>;
 export const QuestionType = z.enum(["short", "long", "select", "file"]);
 export type QuestionType = z.infer<typeof QuestionType>;
 
+/**
+ * How many custom questions one event may carry after publishing. Registration
+ * sends one answer per answerable question (every custom question plus phone and
+ * t-shirt), so `RegisterBody.custom`'s cap must stay above this + 2 — otherwise a
+ * generous organizer makes every signup fail zod, and a zod failure reaches the
+ * guest as an unreadable body with no `message` field.
+ */
+export const MAX_CUSTOM_QUESTIONS = 34;
+
 export const STANDARD_QUESTION_KEYS = ["major_year", "dietary", "resume", "source", "phone", "tshirt"] as const;
 export const StandardQuestionKey = z.enum(STANDARD_QUESTION_KEYS);
 export type StandardQuestionKey = z.infer<typeof StandardQuestionKey>;
@@ -97,6 +106,12 @@ export const Me = z.object({
       committee: Committee,
     })
     .nullable(),
+  /**
+   * Which wallet integrations have credentials configured. Env-presence only —
+   * a true here does not mean the vendor will accept the pass, so the UI must
+   * keep surfacing runtime errors.
+   */
+  wallet: z.object({ apple: z.boolean(), google: z.boolean() }),
 });
 export type Me = z.infer<typeof Me>;
 
@@ -135,6 +150,21 @@ export const EventQuestion = z.object({
   required: z.boolean(),
 });
 export type EventQuestion = z.infer<typeof EventQuestion>;
+
+/**
+ * The organizer's view of a question. Three fields the public page must never
+ * carry: whether the question is switched on for this event, where it sits, and
+ * how many people have already answered it — which is what freezes its type and
+ * options. Widening `EventQuestion` itself would leak all three into the public
+ * `EventDetail`, so this extends it instead, the same way `deletable` is a
+ * server-computed affordance on `OrgEventDetail`.
+ */
+export const OrgEventQuestion = EventQuestion.extend({
+  visible: z.boolean(),
+  sort: z.number(),
+  answerCount: z.number(),
+});
+export type OrgEventQuestion = z.infer<typeof OrgEventQuestion>;
 
 export const EventDetail = z.object({
   id: z.string(),
@@ -186,7 +216,7 @@ export const RegisterBody = z.object({
   plusOne: z.boolean().optional(),
   custom: z
     .array(z.object({ questionId: z.string().uuid(), value: z.string().max(4000) }))
-    .max(20)
+    .max(40)
     .optional(),
   inviteCode: z.string().max(64).optional(),
 });
@@ -262,6 +292,15 @@ export type TransferPreview = z.infer<typeof TransferPreview>;
 // Organizer
 // ---------------------------------------------------------------------------
 
+export const GuestAnswer = z.object({
+  questionId: z.string(),
+  /** Already normalized from jsonb. Long answers are truncated — the CSV is complete. */
+  value: z.string(),
+  fileUrl: z.string().nullable(),
+  fileName: z.string().nullable(),
+});
+export type GuestAnswer = z.infer<typeof GuestAnswer>;
+
 export const GuestRow = z.object({
   registrationId: z.string(),
   name: z.string(),
@@ -279,6 +318,7 @@ export const GuestRow = z.object({
   status: RegistrationStatus,
   serial: z.string().nullable(),
   createdAt: z.string(),
+  answers: z.array(GuestAnswer),
 });
 export type GuestRow = z.infer<typeof GuestRow>;
 
@@ -287,7 +327,6 @@ export const PendingItem = z.object({
   name: z.string(),
   initials: z.string(),
   andrewId: z.string().nullable(),
-  answer: z.string().nullable(),
   createdAt: z.string(),
 });
 export type PendingItem = z.infer<typeof PendingItem>;
@@ -344,8 +383,18 @@ export const OrgEventDetail = z.object({
   /** Full shareable URL — carries ?code= for invite-only events. */
   shareUrl: z.string(),
   committee: Committee,
-  /** Read-only on this screen: PATCH cannot change captures or host questions. */
-  questions: z.array(EventQuestion),
+  /** Editable through PUT /api/org/events/:id/questions, not through PATCH. */
+  questions: z.array(OrgEventQuestion),
+  /**
+   * The live, club-wide controls — not this event's snapshot. A standard
+   * question's `visible` on `OrgEventQuestion` is frozen at creation time; a
+   * super admin can switch its global control off afterward, which the public
+   * page enforces at request time but the frozen `visible` never reflects. The
+   * edit screen needs both to show "off because this event disabled it" vs.
+   * "off because it's globally disabled" instead of quietly lying about what
+   * guests actually see.
+   */
+  questionControls: QuestionControls,
   registrationCount: z.number(),
   /** Drives the edit form's warning before an organizer removes the cap. */
   waitlistCount: z.number(),
@@ -369,6 +418,8 @@ export const Dashboard = z.object({
     inviteCode: z.string().nullable(),
     url: z.string(),
     questionControls: QuestionControls,
+    /** Labels and types for every answer on this page, sent once instead of per guest. */
+    questions: z.array(EventQuestion),
   }),
   kpis: z.object({
     requests: z.number(),
@@ -442,6 +493,7 @@ export const CreateEventBody = z.object({
         label: z.string().min(1).max(300),
         type: QuestionType,
         options: z.array(z.string().max(120)).max(20).optional(),
+        required: z.boolean().optional(),
       }),
     )
     .max(10),
@@ -460,6 +512,25 @@ export const UpdateEventBody = CreateEventBody.omit({ committeeId: true, capture
   status: EventStatus.optional(),
 });
 export type UpdateEventBody = z.infer<typeof UpdateEventBody>;
+
+/** One row of the organizer's question list. `id` absent means "create this one". */
+export const QuestionDraft = z.object({
+  id: z.string().uuid().optional(),
+  label: z.string().min(1).max(300),
+  type: QuestionType,
+  options: z.array(z.string().min(1).max(120)).max(20).nullable().optional(),
+  required: z.boolean(),
+  visible: z.boolean(),
+});
+export type QuestionDraft = z.infer<typeof QuestionDraft>;
+
+/** The full desired list. The server reconciles it against what exists. This cap is
+ *  only a size backstop — the user-facing question-count limit is the handler's
+ *  `too_many` check against MAX_CUSTOM_QUESTIONS, which returns a conversational
+ *  message. Keep this well above the 6 standard rows + MAX_CUSTOM_QUESTIONS so
+ *  zod never fires first and swallows that message. */
+export const UpdateQuestionsBody = z.object({ questions: z.array(QuestionDraft).max(64) });
+export type UpdateQuestionsBody = z.infer<typeof UpdateQuestionsBody>;
 
 // ---------------------------------------------------------------------------
 // Admin portal
@@ -673,6 +744,20 @@ export const contract = c.router(
         path: "/api/org/events/:id",
         body: UpdateEventBody,
         responses: { 200: z.object({ ok: z.literal(true) }), 400: ErrorBody, 401: ErrorBody, 403: ErrorBody, 404: ErrorBody },
+      },
+      updateQuestions: {
+        method: "PUT",
+        path: "/api/org/events/:id/questions",
+        body: UpdateQuestionsBody,
+        responses: {
+          200: z.object({ ok: z.literal(true), questions: z.array(OrgEventQuestion) }),
+          400: ErrorBody,
+          401: ErrorBody,
+          403: ErrorBody,
+          404: ErrorBody,
+          409: ErrorBody,
+        },
+        summary: "Replace an event's question set without destroying answers",
       },
       createEvent: {
         method: "POST",

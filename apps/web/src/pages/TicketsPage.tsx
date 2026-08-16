@@ -12,6 +12,7 @@ import { pad3 } from "../lib/format";
 import logo from "../assets/scottylabs-logo.svg";
 
 function PassCard({ ticket }: { ticket: TicketView }) {
+  const { me } = useAuth();
   const dark = ticket.event.passStyle !== "light";
   const bg = dark ? "var(--black-surface)" : "#ffffff";
   const fg = dark ? "#fff" : "var(--text)";
@@ -136,18 +137,32 @@ function PassCard({ ticket }: { ticket: TicketView }) {
       {ticket.serial && (
         <>
           <div style={{ display: "flex", gap: 10 }}>
-            <button className="pill" style={{ flex: 1, background: "#000", color: "#fff", fontSize: 13, fontWeight: 600, padding: "12px 0", borderRadius: 10 }} onClick={() => void addToApple()}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#383838")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#000")}>
-              <WalletIcon size={15} />
-              Add to Apple Wallet
-            </button>
-            <button className="pill" style={{ flex: 1, background: "#1f1f1f", color: "#fff", border: "1px solid #1f1f1f", fontSize: 13, fontWeight: 600, padding: "12px 0", borderRadius: 10 }} onClick={() => void saveToGoogle()}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#383838")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "#1f1f1f")}>
-              <WalletIcon size={15} />
-              Save to Google Wallet
-            </button>
+            {me.wallet.apple ? (
+              <button className="pill" style={{ flex: 1, background: "#000", color: "#fff", fontSize: 13, fontWeight: 600, padding: "12px 0", borderRadius: 10 }} onClick={() => void addToApple()}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#383838")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#000")}>
+                <WalletIcon size={15} />
+                Add to Apple Wallet
+              </button>
+            ) : (
+              <button className="pill" disabled title="Apple Wallet passes need a paid Apple Developer account — not set up yet." style={{ flex: 1, background: "#000", color: "#fff", fontSize: 13, fontWeight: 600, padding: "12px 0", borderRadius: 10 }}>
+                <WalletIcon size={15} />
+                Apple Wallet — coming soon
+              </button>
+            )}
+            {me.wallet.google ? (
+              <button className="pill" style={{ flex: 1, background: "#1f1f1f", color: "#fff", border: "1px solid #1f1f1f", fontSize: 13, fontWeight: 600, padding: "12px 0", borderRadius: 10 }} onClick={() => void saveToGoogle()}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#383838")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#1f1f1f")}>
+                <WalletIcon size={15} />
+                Save to Google Wallet
+              </button>
+            ) : (
+              <button className="pill" disabled title="Google Wallet passes aren't configured on this deployment yet." style={{ flex: 1, background: "#1f1f1f", color: "#fff", border: "1px solid #1f1f1f", fontSize: 13, fontWeight: 600, padding: "12px 0", borderRadius: 10 }}>
+                <WalletIcon size={15} />
+                Google Wallet — coming soon
+              </button>
+            )}
           </div>
           {walletNote && (
             <div className="fade-in" style={{ fontFamily: "var(--font-ui)", fontSize: 12, color: "var(--warning-text)", background: "var(--warning-bg)", border: "1px solid var(--warning-border)", borderRadius: 8, padding: "10px 12px", textAlign: "center" }}>
@@ -155,7 +170,13 @@ function PassCard({ ticket }: { ticket: TicketView }) {
             </div>
           )}
           <div style={{ fontFamily: "var(--font-ui)", fontSize: 11, color: "var(--muted-3)", textAlign: "center" }}>
-            Issued as real passes — PKPass and Google Wallet objects.
+            {me.wallet.apple && me.wallet.google
+              ? "Add it to Apple Wallet or Google Wallet — or just show the QR."
+              : me.wallet.google
+                ? "Save it to Google Wallet — Apple Wallet is coming soon."
+                : me.wallet.apple
+                  ? "Save it to Apple Wallet — Google Wallet is coming soon."
+                  : "Your QR is the ticket — wallet passes are coming soon."}
           </div>
         </>
       )}

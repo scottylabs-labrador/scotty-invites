@@ -7,9 +7,12 @@ import { useAuth } from "../lib/auth";
 import { AppFooter, AppHeader, Spinner } from "../components/AppShell";
 import EventForm, {
   Card,
+  MAX_CUSTOM_QUESTIONS,
   asCategory,
   emptyEventForm,
+  toDraftQuestion,
   validateEventForm,
+  validateQuestions,
   type EventFormValues,
 } from "../components/EventForm";
 import { AlertCircleIcon, ArrowLeftIcon, LinkIcon, LockIcon } from "../components/icons";
@@ -38,6 +41,12 @@ function toFormValues(e: OrgEventDetail): EventFormValues {
     stampCommittee: e.stampCommittee,
     flagship: e.flagship,
     allowPlusOne: e.allowPlusOne,
+    // Without this the edit screen inherits emptyEventForm's placeholders — one
+    // blank question and the create-time capture defaults — which is harmless
+    // while the card is read-only and destroys the real question set the moment
+    // it is not. `captures` stays untouched: in edit mode the standard rows'
+    // `visible` flags are the only source of truth.
+    questions: e.questions.map(toDraftQuestion),
   };
 }
 
@@ -62,6 +71,7 @@ export default function EditEventPage() {
   const [values, setValues] = useState<EventFormValues | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [questionsSaved, setQuestionsSaved] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirmText, setConfirmText] = useState("");
 
@@ -74,7 +84,7 @@ export default function EditEventPage() {
 
   const save = useMutation({
     mutationFn: async (v: EventFormValues) => {
-      const problem = validateEventForm(v);
+      const problem = validateEventForm(v, { maxCustomQuestions: MAX_CUSTOM_QUESTIONS });
       if (problem) throw new Error(problem);
       const startAt = nyWallClockToUtc(v.date, v.startTime);
       let endAt = nyWallClockToUtc(v.date, v.endTime);
@@ -111,6 +121,55 @@ export default function EditEventPage() {
       setTimeout(() => setSaved(false), 2400);
       await qc.invalidateQueries({ queryKey: ["orgEvent", id] });
       void qc.invalidateQueries({ queryKey: ["orgEvents"] });
+      void qc.invalidateQueries({ queryKey: ["dashboard", id] });
+      void qc.invalidateQueries({ queryKey: ["events"] });
+    },
+    onError: (e: Error) => setError(e.message),
+  });
+
+  const saveQuestions = useMutation({
+    mutationFn: async (v: EventFormValues) => {
+      const problem = validateQuestions(v.questions, MAX_CUSTOM_QUESTIONS);
+      if (problem) throw new Error(problem);
+      const controls = committeesQuery.data?.questionControls;
+      return unwrap(
+        await api.org.updateQuestions({
+          params: { id },
+          body: {
+            questions: v.questions
+              .filter((q) => q.kind === "standard" || q.text.trim())
+              .map((q) => {
+                // Same `globallyOff` check EventForm's "Data to capture" row uses to
+                // disable this row's own toggle. A standard row can carry a stale
+                // `visible: true` from before a super admin switched its control off
+                // club-wide — the organizer has no way to flip it, since the toggle
+                // is disabled precisely when this is true. Sending it verbatim would
+                // 400 the whole PUT on a field the organizer can neither see nor
+                // touch, permanently blocking every future save on the event.
+                const globallyOff = !!q.key && !!controls && !controls[q.key];
+                return {
+                  id: q.qid ?? undefined,
+                  label: q.text.trim(),
+                  type: q.type,
+                  options: q.type === "select" ? q.options.map((o) => o.trim()).filter(Boolean) : undefined,
+                  required: q.required,
+                  visible: q.visible && !globallyOff,
+                };
+              }),
+          },
+        }),
+        200,
+      );
+    },
+    onSuccess: async (data) => {
+      setError(null);
+      // The prefill effect is keyed on the event id, so a refetch does NOT re-seed
+      // this form. Write the server's ids back by hand, or the rows just created
+      // still carry qid: null and a second save duplicates every one of them.
+      setValues((cur) => (cur ? { ...cur, questions: data.questions.map(toDraftQuestion) } : cur));
+      setQuestionsSaved(true);
+      setTimeout(() => setQuestionsSaved(false), 2400);
+      await qc.invalidateQueries({ queryKey: ["orgEvent", id] });
       void qc.invalidateQueries({ queryKey: ["dashboard", id] });
       void qc.invalidateQueries({ queryKey: ["events"] });
     },
@@ -219,7 +278,7 @@ export default function EditEventPage() {
           myCommittee={event.committee}
           isSuper={!!isSuper}
           controls={committeesQuery.data?.questionControls}
-          existingQuestions={event.questions}
+          questionsPending={saveQuestions.isPending}
           registrationExtra={
             event.model === "capacity" && values.model !== "capacity" && event.waitlistCount > 0 ? (
               <div className="fade-in" style={{ marginTop: 14, display: "flex", alignItems: "flex-start", gap: 10, background: "#fdf3e4", border: "1px solid #f0dcb4", borderRadius: 8, padding: "12px 14px", fontSize: 12.5, color: "#654a00", lineHeight: 1.5 }}>
@@ -343,6 +402,26 @@ export default function EditEventPage() {
                 </div>
               </div>
             </Card>
+          }
+          questionsActions={
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
+              <button
+                className="pill pill-blue"
+                style={{ fontSize: 13, padding: "9px 20px" }}
+                disabled={saveQuestions.isPending}
+                onClick={() => {
+                  setError(null);
+                  saveQuestions.mutate(values);
+                }}
+              >
+                {saveQuestions.isPending ? "Saving…" : "Save questions"}
+              </button>
+              <span style={{ fontSize: 11.5, color: "var(--muted-3)", flex: "1 1 220px", lineHeight: 1.5 }}>
+                {questionsSaved
+                  ? "Questions saved — the signup form updated immediately."
+                  : "Questions save on their own, separately from Save changes."}
+              </span>
+            </div>
           }
           railActions={
             <>

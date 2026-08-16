@@ -9,6 +9,8 @@ import { env } from "../env";
 import { sha256 } from "../lib/crypto";
 import { findAdminByEmail } from "../auth/service";
 import { toCsv } from "../lib/csv";
+import { loadAnswers } from "../lib/answers";
+import { buildGuestCsv } from "../lib/guest-export";
 import { fmtLongDate, fmtTimeRange } from "../lib/format";
 import { authServerMetadata } from "../oauth/routes";
 
@@ -119,7 +121,7 @@ function buildMcpServer(session: { auth: McpAuth | null }) {
 
   server.tool(
     "guest_list",
-    "Full guest list for one event (name, andrew ID, status, major, dietary, source, serial).",
+    "Full guest list for one event (name, andrew ID, status, major, dietary, source, serial) plus every signup-question answer. File answers are links a signed-in organizer opens in a browser — they need the session cookie, so they can't be fetched from here.",
     { event: z.string().describe("Event short code, id, or a title fragment") },
     async ({ event }) => {
       const auth = requireAuth();
@@ -135,9 +137,13 @@ function buildMcpServer(session: { auth: McpAuth | null }) {
       const regIds = regs.map((r) => r.registration.id);
       const tickets = await db.select().from(schema.tickets).where(inArray(schema.tickets.registrationId, regIds));
       const ticketByReg = new Map(tickets.filter((t) => !t.revokedAt).map((t) => [t.registrationId, t]));
+      const answersByReg = await loadAnswers(regIds);
       const lines = regs.map(({ registration: r, user: u }) => {
         const t = ticketByReg.get(r.id);
-        return `• ${r.fullName} (${u.andrewId ?? u.email}) — ${r.status}${t ? ` · ${t.serial}` : ""}${r.major ? ` · ${r.major}` : ""}${r.classYear ? ` '${r.classYear.slice(-2)}` : ""}${(r.dietary as string[])?.length ? ` · diet: ${(r.dietary as string[]).join(", ")}` : ""}${r.source ? ` · via ${r.source}` : ""}${r.plusOne ? " · +1" : ""}`;
+        const answers = (answersByReg.get(r.id) ?? [])
+          .map((a) => `\n    ${a.label}: ${a.fileUrl ?? a.value}`)
+          .join("");
+        return `• ${r.fullName} (${u.andrewId ?? u.email}) — ${r.status}${t ? ` · ${t.serial}` : ""}${r.major ? ` · ${r.major}` : ""}${r.classYear ? ` '${r.classYear.slice(-2)}` : ""}${(r.dietary as string[])?.length ? ` · diet: ${(r.dietary as string[]).join(", ")}` : ""}${r.source ? ` · via ${r.source}` : ""}${r.plusOne ? " · +1" : ""}${answers}`;
       });
       return text(`${found.event.title} — ${regs.length} signups\n${lines.join("\n")}`);
     },
@@ -155,48 +161,26 @@ function buildMcpServer(session: { auth: McpAuth | null }) {
       .where(and(inArray(schema.registrations.eventId, ids), eq(schema.registrations.status, "pending")))
       .orderBy(asc(schema.registrations.createdAt));
     if (pending.length === 0) return text("All caught up — no pending reviews.");
+    const answersByReg = await loadAnswers(pending.map((p) => p.registration.id));
     const titleById = new Map(events.map((e) => [e.event.id, e.event.title]));
     const lines = pending.map(({ registration: r, user: u }) => {
       const hours = Math.round((Date.now() - r.createdAt.getTime()) / 3_600_000);
-      return `• ${r.fullName} (${u.andrewId ?? u.email}) — ${titleById.get(r.eventId)} · waiting ${hours}h`;
+      const answers = (answersByReg.get(r.id) ?? []).map((a) => `\n    ${a.label}: ${a.fileUrl ?? a.value}`).join("");
+      return `• ${r.fullName} (${u.andrewId ?? u.email}) — ${titleById.get(r.eventId)} · waiting ${hours}h${answers}`;
     });
     return text(`${pending.length} pending review${pending.length === 1 ? "" : "s"}\n${lines.join("\n")}`);
   });
 
   server.tool(
     "export_csv",
-    "Export one event's guest list as CSV text (same columns as the dashboard export).",
+    "Export one event's guest list as CSV text — the same columns as the dashboard export, including every signup-question answer. File answers are browser-authenticated URLs.",
     { event: z.string().describe("Event short code, id, or a title fragment") },
     async ({ event }) => {
       const auth = requireAuth();
       const found = await findScopedEvent(auth, event);
       if (!found) return text(`No event matching “${event}” in your scope. Try list_events.`);
-      const regs = await db
-        .select({ registration: schema.registrations, user: schema.users })
-        .from(schema.registrations)
-        .innerJoin(schema.users, eq(schema.registrations.userId, schema.users.id))
-        .where(eq(schema.registrations.eventId, found.event.id))
-        .orderBy(asc(schema.registrations.createdAt));
-      const regIds = regs.map((r) => r.registration.id);
-      const tickets = regIds.length ? await db.select().from(schema.tickets).where(inArray(schema.tickets.registrationId, regIds)) : [];
-      const ticketByReg = new Map(tickets.filter((t) => !t.revokedAt).map((t) => [t.registrationId, t]));
-      const csv = toCsv(
-        ["Name", "Andrew ID", "Email", "Status", "Serial", "Major", "Class year", "Dietary", "Source", "Plus one", "Registered at"],
-        regs.map(({ registration: r, user: u }) => [
-          r.fullName,
-          u.andrewId ?? "",
-          u.email,
-          r.status,
-          ticketByReg.get(r.id)?.serial ?? "",
-          r.major ?? "",
-          r.classYear ?? "",
-          ((r.dietary as string[]) ?? []).join("; "),
-          r.source ?? "",
-          r.plusOne ? "yes" : "no",
-          r.createdAt.toISOString(),
-        ]),
-      );
-      return text(csv);
+      const { headers, rows } = await buildGuestCsv(found.event.id);
+      return text(toCsv(headers, rows));
     },
   );
 

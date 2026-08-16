@@ -6,20 +6,66 @@ import type {
   EventAudience,
   EventCategory,
   EventModel,
-  EventQuestion,
+  OrgEventQuestion,
   PassStyle,
   QuestionControls,
   QuestionType,
+  StandardQuestionKey,
 } from "@scottylabs-invites/contract";
 import { EVENT_CATEGORIES } from "@scottylabs-invites/contract";
-import { LockIcon, PlusIcon, XIcon } from "./icons";
+import { ChevronDownIcon, ChevronUpIcon, GripIcon, LockIcon, PlusIcon, XIcon } from "./icons";
 import { GRADIENTS } from "../lib/format";
 import logo from "../assets/scottylabs-logo.svg";
 
+export { MAX_CUSTOM_QUESTIONS } from "@scottylabs-invites/contract";
+
 export interface DraftQuestion {
+  /** Local React key and reorder identity. Never sent to the server. */
   id: number;
+  /** The server row's uuid, or null for a row that has never been saved. */
+  qid: string | null;
+  kind: "standard" | "custom";
+  key: StandardQuestionKey | null;
+  /** The label. Named `text` because that is what the create screen has always called it. */
   text: string;
   type: QuestionType;
+  options: string[];
+  required: boolean;
+  visible: boolean;
+  /** Server-computed. Above zero, the type and options are frozen. */
+  answerCount: number;
+}
+
+/** A fresh custom row whose local id cannot collide with anything already in the list. */
+export function blankQuestion(existing: DraftQuestion[]): DraftQuestion {
+  return {
+    id: Math.max(0, ...existing.map((q) => q.id)) + 1,
+    qid: null,
+    kind: "custom",
+    key: null,
+    text: "",
+    type: "short",
+    options: [],
+    required: false,
+    visible: true,
+    answerCount: 0,
+  };
+}
+
+/** A server question becomes a builder row. `id` is positional and local only. */
+export function toDraftQuestion(q: OrgEventQuestion, index: number): DraftQuestion {
+  return {
+    id: index + 1,
+    qid: q.id,
+    kind: q.kind,
+    key: q.key,
+    text: q.label,
+    type: q.type,
+    options: q.options ?? [],
+    required: q.required,
+    visible: q.visible,
+    answerCount: q.answerCount,
+  };
 }
 
 /** Everything both the create and edit screens collect. Dates are kept as the
@@ -62,7 +108,7 @@ export function emptyEventForm(committeeId = ""): EventFormValues {
     model: "instant",
     capacity: "40",
     captures: { major_year: true, dietary: false, resume: false, source: true, phone: false, tshirt: false },
-    questions: [{ id: 1, text: "", type: "short" }],
+    questions: [blankQuestion([])],
     updatesEmail: "",
     contactEmail: "",
     digest: "daily",
@@ -74,14 +120,73 @@ export function emptyEventForm(committeeId = ""): EventFormValues {
   };
 }
 
-/** Shared client-side checks. Returns the first problem, or null. */
-export function validateEventForm(v: EventFormValues): string | null {
+/** Rows that carry a real question. Blank-label rows are ignored everywhere, exactly
+ *  as the create payload silently drops them, so the seeded empty row from
+ *  `emptyEventForm` can never block a save. */
+function realCustomQuestions(questions: DraftQuestion[]): DraftQuestion[] {
+  return questions.filter((q) => q.kind === "custom" && q.text.trim());
+}
+
+/** The count rule on its own — the only question rule the scalar save enforces. */
+function questionCountProblem(questions: DraftQuestion[], maxCustom: number): string | null {
+  const n = realCustomQuestions(questions).length;
+  if (n > maxCustom) return `That's ${n} questions — a signup form carries at most ${maxCustom}.`;
+  return null;
+}
+
+/**
+ * The rules for the primary save button on both screens: the scalars, plus the
+ * question COUNT — and deliberately not the per-row question rules.
+ *
+ * This runs on the edit screen too (EditEventPage's `save`), where the request it
+ * guards is `PATCH /api/org/events/:id` — and `UpdateEventBody` omits `captures`
+ * and `hostQuestions` entirely (packages/contract/src/index.ts:505), so it cannot
+ * carry questions at all. A "select needs at least one option" rule here would
+ * therefore run against a payload the request never sends, and could refuse to
+ * let an organizer fix a typo in the title of an otherwise-unrelated event.
+ * Question rules belong to the thing that saves questions.
+ */
+export function validateEventForm(v: EventFormValues, opts: { maxCustomQuestions?: number } = {}): string | null {
   if (!v.title.trim()) return "Give the event a name.";
   if (!v.date) return "Pick a date.";
   if (!v.location.trim()) return "Where is it happening?";
   if (!v.updatesEmail.trim() || !v.contactEmail.trim()) return "Add the updates and contact emails.";
+  return questionCountProblem(v.questions, opts.maxCustomQuestions ?? 10);
+}
+
+/**
+ * The full question rules, run by whatever is about to SEND questions: the create
+ * screen's Publish (which posts `hostQuestions`) and the edit screen's Save
+ * questions button (which PUTs the whole list).
+ * Standard rows are skipped: `major_year`, `dietary` and `source` really are
+ * stored as type "select" with no options, and a blanket rule would trip on
+ * every event that exists.
+ */
+export function validateQuestions(questions: DraftQuestion[], maxCustom = 10): string | null {
+  const count = questionCountProblem(questions, maxCustom);
+  if (count) return count;
+  for (const q of realCustomQuestions(questions)) {
+    const label = q.text.trim();
+    if (label.length > 300) return `"${label.slice(0, 30)}…" is too long — keep a question under 300 characters.`;
+    if (q.type !== "select") continue;
+    const options = q.options.map((o) => o.trim()).filter(Boolean);
+    if (options.length === 0) return `Add at least one option to "${label}", or change it to short text.`;
+    if (options.length > 20) return `"${label}" has ${options.length} options — 20 is the maximum.`;
+    const tooLong = options.find((o) => o.length > 120);
+    if (tooLong) return `The option "${tooLong.slice(0, 30)}…" is too long — keep options under 120 characters.`;
+  }
   return null;
 }
+
+function move<T>(list: T[], from: number, to: number): T[] {
+  if (from === to || to < 0 || to >= list.length) return list;
+  const next = list.slice();
+  const [item] = next.splice(from, 1);
+  next.splice(to, 0, item);
+  return next;
+}
+
+const FILE_HINT = "Guests upload a PDF or Word document, up to 5 MB.";
 
 const TYPE_LABELS: Record<QuestionType, string> = { short: "Short text", long: "Long text", select: "Select", file: "File" };
 
@@ -109,6 +214,253 @@ export function seg(on: boolean): React.CSSProperties {
     : { all: "unset", cursor: "pointer", fontSize: 13, fontWeight: 500, padding: "8px 18px", borderRadius: 100, background: "#fff", color: "var(--muted-1)", border: "1px solid var(--border)", fontFamily: "var(--font-ui)" };
 }
 
+/**
+ * The question builder, shared by create and edit. `questions` may contain the
+ * event's standard rows (edit mode) — those are rendered by the "Data to capture"
+ * card, not here, so this component only ever touches the custom slice and always
+ * re-emits [standard…, live custom…, hidden custom…] so `sort` stays coherent and
+ * retired rows land at the tail.
+ */
+export function QuestionsCard({
+  questions,
+  onChange,
+  isEdit,
+  actions,
+}: {
+  questions: DraftQuestion[];
+  onChange: (next: DraftQuestion[]) => void;
+  isEdit: boolean;
+  actions?: React.ReactNode;
+}) {
+  const [dragId, setDragId] = useState<number | null>(null);
+  const [overId, setOverId] = useState<number | null>(null);
+  const [handleHeld, setHandleHeld] = useState<number | null>(null);
+
+  const standard = questions.filter((q) => q.kind === "standard");
+  const customs = questions.filter((q) => q.kind === "custom");
+  /**
+   * A custom question that people have answered is never deleted — deleting it
+   * cascades its answers away (answers.question_id is ON DELETE CASCADE), so the
+   * server keeps it as visible:false instead. Those rows must still travel in
+   * every later save, or the next PUT reads as a fresh attempt to remove them; but
+   * they must not sit in the live list either, or "remove" would look like it did
+   * nothing the moment the server's list came back. Two lists, one array.
+   *
+   * In create mode `hidden` is always empty — `blankQuestion` sets visible:true and
+   * nothing can hide a row that has never been saved.
+   */
+  const live = customs.filter((q) => q.visible);
+  const hidden = customs.filter((q) => !q.visible);
+  const commit = (nextLive: DraftQuestion[], nextHidden: DraftQuestion[] = hidden) =>
+    onChange([...standard, ...nextLive, ...nextHidden]);
+  const patch = (id: number, fields: Partial<DraftQuestion>) =>
+    commit(live.map((x) => (x.id === id ? { ...x, ...fields } : x)));
+  const clearDrag = () => {
+    setDragId(null);
+    setOverId(null);
+    setHandleHeld(null);
+  };
+
+  return (
+    <Card title="Your questions" sub="Guests see them in this order on the signup form. Drag the handle, or use the arrows.">
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
+        {live.map((q, i) => {
+          const locked = isEdit && q.answerCount > 0;
+          return (
+            <div
+              key={q.id}
+              draggable={handleHeld === q.id}
+              onDragStart={(e) => {
+                // Firefox refuses to start a drag unless setData is called here.
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", String(q.id));
+                setDragId(q.id);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+                if (dragId !== null && dragId !== q.id) setOverId(q.id);
+              }}
+              onDragLeave={(e) => {
+                // dragleave also fires for children (the inputs, the buttons), so
+                // only clear when the pointer really left this row.
+                if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+                  setOverId((cur) => (cur === q.id ? null : cur));
+                }
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const from = live.findIndex((x) => x.id === dragId);
+                if (from >= 0 && from !== i) commit(move(live, from, i));
+                clearDrag();
+              }}
+              onDragEnd={clearDrag}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: 8,
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                padding: "12px 14px",
+                background: "var(--panel)",
+                borderTop: overId === q.id ? "2px solid var(--blue)" : undefined,
+                opacity: dragId === q.id ? 0.45 : 1,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <button
+                  aria-label="Drag to reorder"
+                  onMouseDown={() => setHandleHeld(q.id)}
+                  onMouseUp={() => setHandleHeld(null)}
+                  style={{ all: "unset", cursor: "grab", color: "#aebdcc", display: "flex" }}
+                >
+                  <GripIcon size={13} />
+                </button>
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  <button
+                    aria-label="Move up"
+                    disabled={i === 0}
+                    onClick={() => commit(move(live, i, i - 1))}
+                    style={{ all: "unset", cursor: i === 0 ? "default" : "pointer", display: "flex", color: i === 0 ? "#d9e1e7" : "var(--muted-3)" }}
+                  >
+                    <ChevronUpIcon size={11} />
+                  </button>
+                  <button
+                    aria-label="Move down"
+                    disabled={i === live.length - 1}
+                    onClick={() => commit(move(live, i, i + 1))}
+                    style={{ all: "unset", cursor: i === live.length - 1 ? "default" : "pointer", display: "flex", color: i === live.length - 1 ? "#d9e1e7" : "var(--muted-3)" }}
+                  >
+                    <ChevronDownIcon size={11} />
+                  </button>
+                </div>
+                <input
+                  value={q.text}
+                  onChange={(e) => patch(q.id, { text: e.target.value })}
+                  placeholder="Ask anything — e.g. GitHub handle, team size"
+                  style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontFamily: "var(--font-ui)", fontSize: 13.5, color: "var(--text)" }}
+                />
+                <button
+                  onClick={() => patch(q.id, { required: !q.required })}
+                  aria-label="Required"
+                  style={{ all: "unset", cursor: "pointer", display: "flex", alignItems: "center", gap: 6, flex: "none" }}
+                >
+                  <Switch on={q.required} />
+                  <span style={{ fontSize: 11.5, color: "var(--muted-3)" }}>Required</span>
+                </button>
+                <select
+                  value={q.type}
+                  disabled={locked}
+                  onChange={(e) => patch(q.id, { type: e.target.value as QuestionType })}
+                  style={{ fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 600, color: "var(--muted-1)", background: "#fff", border: "1px solid #d9e1e7", borderRadius: 4, padding: "3px 6px", outline: "none" }}
+                >
+                  {(Object.keys(TYPE_LABELS) as QuestionType[]).map((t) => (
+                    <option key={t} value={t}>
+                      {TYPE_LABELS[t]}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  // An answered question cannot be deleted, so hide it locally and
+                  // let it drop into the Hidden list right away — the alternative is
+                  // a row that vanishes on click and reappears after the save.
+                  onClick={() => (locked ? patch(q.id, { visible: false }) : commit(live.filter((x) => x.id !== q.id)))}
+                  aria-label={locked ? "Hide question" : "Remove question"}
+                  style={{ all: "unset", cursor: "pointer", color: "var(--muted-3)", display: "flex" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger)")}
+                  onMouseLeave={(e) => (e.currentTarget.style.color = "var(--muted-3)")}
+                >
+                  <XIcon size={14} />
+                </button>
+              </div>
+
+              {q.type === "select" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 6, paddingLeft: 27 }}>
+                  {q.options.map((opt, oi) => (
+                    <div key={oi} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <input
+                        className="input"
+                        style={{ padding: "6px 10px", fontSize: 12.5, maxWidth: 280 }}
+                        value={opt}
+                        disabled={locked}
+                        placeholder={`Option ${oi + 1}`}
+                        onChange={(e) => patch(q.id, { options: q.options.map((o, k) => (k === oi ? e.target.value : o)) })}
+                      />
+                      {!locked && (
+                        <button className="quiet-link" onClick={() => patch(q.id, { options: q.options.filter((_, k) => k !== oi) })}>
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  {!locked && (
+                    <button
+                      className="dropzone"
+                      style={{ padding: 8, fontSize: 12, maxWidth: 280 }}
+                      onClick={() => patch(q.id, { options: [...q.options, ""] })}
+                    >
+                      <PlusIcon size={12} />
+                      Add option
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {q.type === "file" && (
+                <div style={{ paddingLeft: 27, fontSize: 11.5, color: "var(--muted-3)" }}>{FILE_HINT}</div>
+              )}
+
+              {locked && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, paddingLeft: 27, fontSize: 11.5, color: "var(--muted-3)" }}>
+                  <LockIcon size={11} />
+                  {q.answerCount} {q.answerCount === 1 ? "person has" : "people have"} answered this — its type and options are fixed, removing
+                  it moves it to Hidden below instead of deleting it, and rewording it changes the prompt shown next to their existing answers.
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <button className="dropzone" style={{ padding: 12, fontWeight: 500 }} onClick={() => commit([...live, blankQuestion(questions)])}>
+          <PlusIcon size={14} />
+          Add a question
+        </button>
+
+        {hidden.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 6, paddingTop: 12, borderTop: "1px solid var(--border-subtle)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11.5, fontWeight: 600, color: "var(--muted-3)" }}>
+              <LockIcon size={11} />
+              Hidden — answers kept
+            </div>
+            <div style={{ fontSize: 11.5, color: "var(--muted-3)", lineHeight: 1.5 }}>
+              Guests no longer see these, and they keep their CSV column and every answer already given.
+            </div>
+            {hidden.map((q) => (
+              <div
+                key={q.id}
+                style={{ display: "flex", alignItems: "center", gap: 10, border: "1px dashed #d9e1e7", borderRadius: 8, padding: "10px 14px", background: "var(--canvas-muted)" }}
+              >
+                <span style={{ fontSize: 13, color: "var(--muted-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{q.text}</span>
+                <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted-3)", flex: "none" }}>
+                  {q.answerCount} {q.answerCount === 1 ? "answer" : "answers"}
+                </span>
+                <button
+                  className="quiet-link"
+                  style={{ flex: "none" }}
+                  onClick={() => commit([...live, { ...q, visible: true }], hidden.filter((x) => x.id !== q.id))}
+                >
+                  Show again
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {actions}
+      </div>
+    </Card>
+  );
+}
+
 const AUDIENCE_NOTES: Record<EventAudience, string> = {
   cmu: "Guests must sign in with an andrew email. IDs verified automatically.",
   cmu_guests: "Andrew sign-in required, but approved guests can transfer a +1 to anyone.",
@@ -130,12 +482,22 @@ export interface EventFormProps {
   myCommittee?: Committee | null;
   isSuper: boolean;
   controls?: QuestionControls;
-  /** Edit mode: the event's live questions, shown read-only (PATCH can't change them). */
-  existingQuestions?: EventQuestion[];
   /** Slot under the Registration card — the invite-link panel on the edit screen. */
   registrationExtra?: React.ReactNode;
   /** Slot at the bottom of the left column — the danger zone on the edit screen. */
   footerExtra?: React.ReactNode;
+  /** Edit mode: the Save questions button, which posts to its own endpoint. */
+  questionsActions?: React.ReactNode;
+  /**
+   * Edit mode: true while the questions PUT is in flight. The question rows and
+   * the "Data to capture" toggles both feed the same `questions` array that the
+   * save's `onSuccess` overwrites wholesale with the server snapshot — an edit
+   * made to either while the request is outstanding would otherwise vanish
+   * silently the moment the response lands. Freezing both for the round trip
+   * closes that window; nothing else on the screen touches `questions`, so
+   * nothing else needs to freeze.
+   */
+  questionsPending?: boolean;
   /** Slot under the pass preview — publish button, or save/cancel. */
   railActions: React.ReactNode;
 }
@@ -143,8 +505,10 @@ export interface EventFormProps {
 /**
  * The event form shared by Create and Edit. Both screens render the same cards
  * from the same state shape so they can't drift; `mode` only gates the fields
- * the API genuinely treats differently (committee and the question set are
- * fixed once an event exists, because PATCH cannot change them).
+ * the API genuinely treats differently — the committee is fixed once an event
+ * exists. The question set is no longer one of those: edit mode's own "Save
+ * questions" button (`questionsActions`) sends it through its own endpoint,
+ * separate from the scalar PATCH this form's primary save button drives.
  */
 export default function EventForm({
   mode,
@@ -154,13 +518,13 @@ export default function EventForm({
   myCommittee,
   isSuper,
   controls,
-  existingQuestions,
   registrationExtra,
   footerExtra,
+  questionsActions,
+  questionsPending = false,
   railActions,
 }: EventFormProps) {
   const set = <K extends keyof EventFormValues>(key: K, value: EventFormValues[K]) => onChange({ ...v, [key]: value });
-  const [nextQid, setNextQid] = useState(() => Math.max(0, ...v.questions.map((q) => q.id)) + 1);
 
   const isEdit = mode === "edit";
   const effectiveCommitteeId = v.committeeId || myCommittee?.id || "";
@@ -183,7 +547,7 @@ export default function EventForm({
     ? `${new Date(`${v.date}T${v.startTime}:00`).toLocaleString("en-US", { month: "short" }).toUpperCase()} ${String(new Date(`${v.date}T${v.startTime}:00`).getDate()).padStart(2, "0")} · ${v.startTime}`
     : "OCT 03 · 16:00";
   const previewLoc = (v.location || "Location TBD").split(",")[0].toUpperCase().slice(0, 18);
-  const dark = v.passStyle === "dark";
+  const dark = v.passStyle !== "light";
   const mutedFg = dark ? "rgba(255,255,255,0.65)" : "#5f6f7f";
 
   return (
@@ -324,32 +688,64 @@ export default function EventForm({
           {registrationExtra}
         </Card>
 
-        {isEdit ? (
-          <Card title="Signup questions" sub="Fixed after publishing — guests who already answered would be left with orphaned responses.">
-            <div style={{ display: "flex", flexDirection: "column", marginTop: 10 }}>
-              {(existingQuestions ?? []).filter((q) => q.kind === "custom" || q.key).length === 0 && (
-                <div style={{ fontSize: 12.5, color: "var(--muted-3)", padding: "8px 0" }}>Name and andrew ID only.</div>
-              )}
-              {(existingQuestions ?? []).map((q) => (
-                <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 2px", borderBottom: "1px solid var(--border-subtle)" }}>
-                  <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text)" }}>{q.label}</span>
-                  <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted-3)" }}>
-                    {q.kind === "custom" ? "your question" : "standard"} · {TYPE_LABELS[q.type].toLowerCase()}
-                  </span>
-                </div>
-              ))}
+        <Card
+          title="Data to capture"
+          sub={
+            isEdit
+              ? "Switching one off hides it from the signup form immediately. Answers already collected are kept."
+              : "Andrew ID and name come free with andrew sign-in. Ask only for what this event needs."
+          }
+        >
+          {/*
+            A plain <fieldset disabled> here, rather than threading a `disabled`
+            prop through every toggle, is what lets these rows freeze during a
+            questions save without editing each button — see `questionsPending`
+            on EventFormProps for why they must freeze at all.
+          */}
+          <fieldset
+            disabled={questionsPending}
+            style={{ display: "flex", flexDirection: "column", marginTop: 10, border: "none", margin: 0, padding: 0, minWidth: 0, opacity: questionsPending ? 0.55 : 1, transition: "opacity 150ms var(--ease)" }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 2px", borderBottom: "1px solid var(--border-subtle)", opacity: 0.65 }}>
+              <Switch on />
+              <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text)" }}>Andrew ID + name</span>
+              <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted-3)" }}>always on</span>
             </div>
-          </Card>
-        ) : (
-          <>
-            <Card title="Data to capture" sub="Andrew ID and name come free with andrew sign-in. Ask only for what this event needs.">
-              <div style={{ display: "flex", flexDirection: "column", marginTop: 10 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 2px", borderBottom: "1px solid var(--border-subtle)", opacity: 0.65 }}>
-                  <Switch on />
-                  <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text)" }}>Andrew ID + name</span>
-                  <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted-3)" }}>always on</span>
-                </div>
-                {captureDefs.map((c) => (
+
+            {isEdit
+              ? // Edit mode reads the event's OWN standard rows, not the global
+                // control list: a key the super admin has since switched off
+                // club-wide still shows here, disabled, so the organizer can see
+                // why the field vanished instead of it silently disappearing.
+                v.questions
+                  .filter((q) => q.kind === "standard")
+                  .map((q) => {
+                    const globallyOff = !!q.key && !!controls && !controls[q.key];
+                    return (
+                      <button
+                        key={q.id}
+                        disabled={globallyOff}
+                        onClick={() =>
+                          set(
+                            "questions",
+                            v.questions.map((x) => (x.id === q.id ? { ...x, visible: !x.visible } : x)),
+                          )
+                        }
+                        style={{ all: "unset", cursor: globallyOff ? "default" : "pointer", display: "flex", alignItems: "center", gap: 12, padding: "11px 2px", borderBottom: "1px solid var(--border-subtle)", opacity: globallyOff ? 0.55 : 1 }}
+                      >
+                        <Switch on={q.visible && !globallyOff} />
+                        <span style={{ fontSize: 13.5, fontWeight: 500, color: "var(--text)" }}>{q.text}</span>
+                        <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted-3)" }}>
+                          {globallyOff
+                            ? "off club-wide"
+                            : q.answerCount > 0
+                              ? `${q.answerCount} ${q.answerCount === 1 ? "answer" : "answers"}`
+                              : "standard field"}
+                        </span>
+                      </button>
+                    );
+                  })
+              : captureDefs.map((c) => (
                   <button
                     key={c.key}
                     onClick={() => set("captures", { ...v.captures, [c.key]: !v.captures[c.key] })}
@@ -360,59 +756,26 @@ export default function EventForm({
                     <span style={{ marginLeft: "auto", fontSize: 11.5, color: "var(--muted-3)" }}>{c.note}</span>
                   </button>
                 ))}
-              </div>
-            </Card>
+          </fieldset>
+        </Card>
 
-            <Card title="Your questions" sub="Edit inline — guests see them in this order on the signup form.">
-              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 14 }}>
-                {v.questions.map((q) => (
-                  <div key={q.id} style={{ display: "flex", alignItems: "center", gap: 10, border: "1px solid var(--border)", borderRadius: 8, padding: "12px 14px", background: "var(--panel)" }}>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#aebdcc" strokeWidth="2" strokeLinecap="round">
-                      <line x1="4" y1="8" x2="20" y2="8" />
-                      <line x1="4" y1="16" x2="20" y2="16" />
-                    </svg>
-                    <input
-                      value={q.text}
-                      onChange={(e) => set("questions", v.questions.map((x) => (x.id === q.id ? { ...x, text: e.target.value } : x)))}
-                      placeholder="Ask anything — e.g. GitHub handle, team size"
-                      style={{ flex: 1, minWidth: 0, border: "none", outline: "none", background: "transparent", fontFamily: "var(--font-ui)", fontSize: 13.5, color: "var(--text)" }}
-                    />
-                    <select
-                      value={q.type}
-                      onChange={(e) => set("questions", v.questions.map((x) => (x.id === q.id ? { ...x, type: e.target.value as QuestionType } : x)))}
-                      style={{ fontFamily: "var(--font-ui)", fontSize: 11, fontWeight: 600, color: "var(--muted-1)", background: "#fff", border: "1px solid #d9e1e7", borderRadius: 4, padding: "3px 6px", outline: "none" }}
-                    >
-                      {(Object.keys(TYPE_LABELS) as QuestionType[]).map((t) => (
-                        <option key={t} value={t}>
-                          {TYPE_LABELS[t]}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => set("questions", v.questions.filter((x) => x.id !== q.id))}
-                      style={{ all: "unset", cursor: "pointer", color: "var(--muted-3)", display: "flex" }}
-                      onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger)")}
-                      onMouseLeave={(e) => (e.currentTarget.style.color = "var(--muted-3)")}
-                    >
-                      <XIcon size={14} />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  className="dropzone"
-                  style={{ padding: 12, fontWeight: 500 }}
-                  onClick={() => {
-                    set("questions", [...v.questions, { id: nextQid, text: "", type: "short" }]);
-                    setNextQid(nextQid + 1);
-                  }}
-                >
-                  <PlusIcon size={14} />
-                  Add a question
-                </button>
-              </div>
-            </Card>
-          </>
-        )}
+        {/*
+          Same reasoning and the same <fieldset disabled> mechanism as the "Data
+          to capture" toggles above — wrapping the call site freezes every row,
+          drag handle, and add/remove control inside QuestionsCard for the
+          duration of the save without editing QuestionsCard itself.
+        */}
+        <fieldset
+          disabled={questionsPending}
+          style={{ border: "none", margin: 0, padding: 0, minWidth: 0, opacity: questionsPending ? 0.55 : 1, transition: "opacity 150ms var(--ease)" }}
+        >
+          <QuestionsCard
+            questions={v.questions}
+            onChange={(next) => set("questions", next)}
+            isEdit={isEdit}
+            actions={questionsActions}
+          />
+        </fieldset>
 
         <Card title="Updates & contact" sub="Status emails go out via Mailgun. Every invite shows a contact.">
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14, marginTop: 14 }}>

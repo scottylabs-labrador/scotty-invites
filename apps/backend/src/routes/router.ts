@@ -3,6 +3,7 @@ import { and, asc, desc, eq, gte, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { FastifyRequest, FastifyReply } from "fastify";
 import {
   contract,
+  MAX_CUSTOM_QUESTIONS,
   type QuestionControls,
   type BrowseEvent,
   type EventDetail,
@@ -12,9 +13,11 @@ import {
   type PendingItem,
   type Dashboard,
   type AdminRow,
+  type OrgEventQuestion,
 } from "@scottylabs-invites/contract";
 import { db, schema } from "../db/client";
 import { env, isCmuEmail } from "../env";
+import { loadAnswers } from "../lib/answers";
 import { initialsOf, safeEqual } from "../lib/crypto";
 import { fmtStubDate } from "../lib/format";
 import { sendMail } from "../lib/mail";
@@ -30,6 +33,7 @@ import {
   approvedCount,
   promoteWaitlist,
   waitlistToPending,
+  lockEvent,
 } from "../services/registrations";
 import { ensureTransfer, revokeTransfer, parseTransferToken, transferUrl } from "../services/transfers";
 import { getQuestionControls, setQuestionControl } from "../services/settings";
@@ -192,6 +196,15 @@ async function buildGuestRows(eventId: string): Promise<{ guests: GuestRow[]; re
     : [];
   const fileById = new Map(fileRows.map((f) => [f.id, f]));
 
+  const answersByReg = await loadAnswers(regIds);
+
+  /**
+   * The dashboard re-fetches every 30 s and ships every guest's answers to every
+   * committee admin, uncompressed. Cap what the UI needs; the CSV export carries
+   * the full text.
+   */
+  const DASHBOARD_ANSWER_MAX = 500;
+
   const guests: GuestRow[] = rows.map(({ registration: r, user: u }) => {
     const ticket = ticketByReg.get(r.id);
     const file = r.resumeFileId ? fileById.get(r.resumeFileId) : undefined;
@@ -212,9 +225,50 @@ async function buildGuestRows(eventId: string): Promise<{ guests: GuestRow[]; re
       status: r.status,
       serial: ticket?.serial ?? null,
       createdAt: r.createdAt.toISOString(),
+      answers: (answersByReg.get(r.id) ?? []).map((a) => ({
+        questionId: a.questionId,
+        value: a.value.length > DASHBOARD_ANSWER_MAX ? `${a.value.slice(0, DASHBOARD_ANSWER_MAX)}…` : a.value,
+        fileUrl: a.fileUrl,
+        fileName: a.fileName,
+      })),
     };
   });
   return { guests, regs: rows.map((r) => r.registration) };
+}
+
+/** Every question on an event, in sort order, with the answer count that locks it. */
+async function orgQuestions(eventId: string): Promise<OrgEventQuestion[]> {
+  const rows = await db
+    .select()
+    .from(schema.eventQuestions)
+    .where(eq(schema.eventQuestions.eventId, eventId))
+    .orderBy(asc(schema.eventQuestions.sort));
+  if (rows.length === 0) return [];
+
+  const counts = await db
+    .select({ questionId: schema.answers.questionId, count: sql<number>`count(*)::int` })
+    .from(schema.answers)
+    .where(
+      inArray(
+        schema.answers.questionId,
+        rows.map((q) => q.id),
+      ),
+    )
+    .groupBy(schema.answers.questionId);
+  const countById = new Map(counts.map((c) => [c.questionId, c.count]));
+
+  return rows.map((q) => ({
+    id: q.id,
+    kind: q.kind,
+    key: (q.key as OrgEventQuestion["key"]) ?? null,
+    label: q.label,
+    type: q.type,
+    options: q.options ?? null,
+    required: q.required,
+    visible: q.visible,
+    sort: q.sort,
+    answerCount: countById.get(q.id) ?? 0,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -441,28 +495,78 @@ export const router = s.router(contract, {
         return { status: 409, body: { error: "already_registered", message: "You already signed up for this one." } };
       }
 
-      // Validate custom answers against this event's questions. Dedupe by
-      // questionId so a repeated id in the payload can't trip the answers
-      // unique index (which would otherwise 500 mid-write).
+      // The global question controls gate the public form (see the events.get
+      // handler), so they gate what we accept too — otherwise an organizer could
+      // restore collection of a field a super admin switched off club-wide. This
+      // read used to happen further down, AFTER the destructive block; it has to
+      // be here, because required-enforcement needs it.
+      const controls = await getQuestionControls();
+
+      // Everything from here to the destructive block below is validation. A 400
+      // returned after that block deletes a returning guest's prior registration
+      // and unlinks their ticket with nothing recreated, so nothing below may fail.
       const questions = await db
         .select()
         .from(schema.eventQuestions)
-        .where(and(eq(schema.eventQuestions.eventId, event.id), eq(schema.eventQuestions.visible, true)));
-      const questionById = new Map(questions.map((q) => [q.id, q]));
-      const seenQ = new Set<string>();
-      const customAnswers = (body.custom ?? []).filter((a) => {
-        const q = questionById.get(a.questionId);
-        const answerable = q && (q.kind === "custom" || q.key === "phone" || q.key === "tshirt");
-        if (!answerable || a.value.trim().length === 0 || seenQ.has(a.questionId)) return false;
-        seenQ.add(a.questionId);
-        return true;
-      });
+        .where(and(eq(schema.eventQuestions.eventId, event.id), eq(schema.eventQuestions.visible, true)))
+        .orderBy(asc(schema.eventQuestions.sort));
 
-      // Validate resume ownership BEFORE any destructive mutation.
-      if (body.resumeFileId) {
-        const file = await db.select().from(schema.files).where(eq(schema.files.id, body.resumeFileId));
-        if (!file[0] || file[0].ownerUserId !== ctx.user.id) {
-          return { status: 400, body: { error: "bad_file", message: "That resume upload doesn't belong to you." } };
+      // Fold the payload down first: blanks never occupy a slot, last non-blank
+      // wins, and one entry per question satisfies the answers unique index.
+      const submitted = new Map<string, string>();
+      for (const a of body.custom ?? []) {
+        const trimmed = a.value.trim();
+        if (trimmed.length > 0) submitted.set(a.questionId, trimmed);
+      }
+
+      // Iterate the questions, not the payload: an id that is no longer answerable
+      // (hidden, deleted, or another event's) is ignored rather than rejected, so a
+      // form left open while the organizer edits the questions still submits.
+      const customAnswers: { questionId: string; value: string }[] = [];
+      const fileAnswerIds: string[] = [];
+      for (const q of questions) {
+        if (q.kind !== "custom" && !(q.key && controls[q.key as keyof QuestionControls])) continue;
+        // major_year / dietary / resume / source arrive in their own body fields.
+        if (q.kind === "standard" && q.key !== "phone" && q.key !== "tshirt") continue;
+
+        const value = submitted.get(q.id);
+        if (!value) {
+          if (q.required) {
+            return { status: 400, body: { error: "answer_required", message: `“${q.label}” is required.` } };
+          }
+          continue;
+        }
+        if (q.type === "select" && (q.options ?? []).length > 0 && !(q.options ?? []).includes(value)) {
+          return { status: 400, body: { error: "answer_option", message: `Pick one of the listed options for “${q.label}”.` } };
+        }
+        if (q.type === "file") {
+          if (!isUuid(value)) {
+            return { status: 400, body: { error: "answer_file", message: `Upload a file for “${q.label}” before submitting.` } };
+          }
+          // Lower-cased at write time: GET /api/files/:id matches lower-case only,
+          // so an upper-case answer would produce an organizer link that 404s.
+          const fileId = value.toLowerCase();
+          fileAnswerIds.push(fileId);
+          customAnswers.push({ questionId: q.id, value: fileId });
+          continue;
+        }
+        customAnswers.push({ questionId: q.id, value });
+      }
+
+      // Validate every referenced upload BEFORE any destructive mutation. One
+      // projected query covers the resume and all file answers; the old check
+      // selected the whole row and dragged a 5 MB bytea into memory to read one
+      // column.
+      const referenced = [
+        ...new Set([...(body.resumeFileId ? [body.resumeFileId.toLowerCase()] : []), ...fileAnswerIds]),
+      ];
+      if (referenced.length > 0) {
+        const owned = await db
+          .select({ id: schema.files.id })
+          .from(schema.files)
+          .where(and(inArray(schema.files.id, referenced), eq(schema.files.ownerUserId, ctx.user.id)));
+        if (owned.length !== referenced.length) {
+          return { status: 400, body: { error: "bad_file", message: "That upload doesn't belong to you." } };
         }
       }
 
@@ -475,16 +579,27 @@ export const router = s.router(contract, {
 
       await db.update(schema.users).set({ name: body.fullName }).where(eq(schema.users.id, ctx.user.id));
 
-      const controls = await getQuestionControls();
+      /**
+       * The global controls say what the club collects at all; the event's own
+       * question rows say what THIS event collects. A value has to clear both, or
+       * an organizer's "hide Resume upload" toggle would stop the field rendering
+       * while the server carried on storing resume_file_id — a switch labelled
+       * hide that keeps collecting. `questions` is already filtered to visible
+       * rows, so presence is the test.
+       */
+      const asks = (key: keyof QuestionControls) => controls[key] && questions.some((q) => q.key === key);
+
       const outcome = await createRegistration({
         event,
         user: ctx.user,
         fullName: body.fullName,
-        major: controls.major_year ? (body.major ?? null) : null,
-        classYear: controls.major_year ? (body.classYear ?? null) : null,
-        dietary: controls.dietary ? (body.dietary ?? []) : [],
-        resumeFileId: controls.resume ? (body.resumeFileId ?? null) : null,
-        source: controls.source ? (body.source ?? null) : null,
+        major: asks("major_year") ? (body.major ?? null) : null,
+        classYear: asks("major_year") ? (body.classYear ?? null) : null,
+        dietary: asks("dietary") ? (body.dietary ?? []) : [],
+        // Lower-cased for the same reason file answers are: the organizer's
+        // download link has to match a route that only accepts lower-case ids.
+        resumeFileId: asks("resume") ? (body.resumeFileId?.toLowerCase() ?? null) : null,
+        source: asks("source") ? (body.source ?? null) : null,
         plusOne: body.plusOne ?? false,
         customAnswers,
       });
@@ -800,27 +915,13 @@ export const router = s.router(contract, {
         plusOnesInvited: regs.filter((r) => r.plusOne && r.status === "approved").length,
       };
 
-      // Pending queue with the guest's first custom-question answer.
       const pendingRegs = regs.filter((r) => r.status === "pending").sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-      const pendingIds = pendingRegs.map((r) => r.id);
-      const answerRows = pendingIds.length
-        ? await db
-            .select({ answer: schema.answers, question: schema.eventQuestions })
-            .from(schema.answers)
-            .innerJoin(schema.eventQuestions, eq(schema.answers.questionId, schema.eventQuestions.id))
-            .where(and(inArray(schema.answers.registrationId, pendingIds), eq(schema.eventQuestions.kind, "custom")))
-        : [];
-      const answerByReg = new Map<string, string>();
-      for (const a of answerRows.sort((x, y) => x.question.sort - y.question.sort)) {
-        if (!answerByReg.has(a.answer.registrationId)) answerByReg.set(a.answer.registrationId, String(a.answer.value ?? ""));
-      }
       const guestByReg = new Map(guests.map((g) => [g.registrationId, g]));
       const pending: PendingItem[] = pendingRegs.map((r) => ({
         registrationId: r.id,
         name: r.fullName,
         initials: initialsOf(r.fullName),
         andrewId: guestByReg.get(r.id)?.andrewId ?? null,
-        answer: answerByReg.get(r.id) ?? null,
         createdAt: r.createdAt.toISOString(),
       }));
 
@@ -849,6 +950,15 @@ export const router = s.router(contract, {
           inviteCode: e.inviteCode,
           url: `${env.appUrl}/e/${e.shortCode}`,
           questionControls: controls,
+          questions: (await orgQuestions(e.id)).map((q) => ({
+            id: q.id,
+            kind: q.kind,
+            key: q.key,
+            label: q.label,
+            type: q.type,
+            options: q.options,
+            required: q.required,
+          })),
         },
         kpis,
         guests,
@@ -867,11 +977,8 @@ export const router = s.router(contract, {
       if (scoped === "forbidden") return forbidden;
       const { event: e, committee: c } = scoped;
 
-      const questions = await db
-        .select()
-        .from(schema.eventQuestions)
-        .where(eq(schema.eventQuestions.eventId, e.id))
-        .orderBy(asc(schema.eventQuestions.sort));
+      const questions = await orgQuestions(e.id);
+      const questionControls = await getQuestionControls();
 
       const statusCounts = await db
         .select({ status: schema.registrations.status, count: sql<number>`count(*)::int` })
@@ -915,15 +1022,8 @@ export const router = s.router(contract, {
           inviteCode: e.inviteCode,
           shareUrl,
           committee: committeeDto(c),
-          questions: questions.map((q) => ({
-            id: q.id,
-            kind: q.kind,
-            key: (q.key as EventDetail["questions"][number]["key"]) ?? null,
-            label: q.label,
-            type: q.type,
-            options: q.options ?? null,
-            required: q.required,
-          })),
+          questions,
+          questionControls,
           registrationCount,
           waitlistCount,
           deletable: registrationCount === 0,
@@ -1091,6 +1191,197 @@ export const router = s.router(contract, {
       return { status: 200, body: { ok: true } };
     },
 
+    updateQuestions: async ({ params, body, request }) => {
+      const ctx = ctxOf(request);
+      if (!ctx) return unauthorized;
+      if (!ctx.admin) return forbidden;
+      const scoped = await loadScopedEvent(ctx, params.id);
+      if (scoped === null) return { status: 404, body: { error: "not_found", message: "Event not found" } };
+      if (scoped === "forbidden") return forbidden;
+
+      const existing = await db
+        .select()
+        .from(schema.eventQuestions)
+        .where(eq(schema.eventQuestions.eventId, params.id))
+        .orderBy(asc(schema.eventQuestions.sort));
+      const existingById = new Map(existing.map((q) => [q.id, q]));
+
+      const counts = existing.length
+        ? await db
+            .select({ questionId: schema.answers.questionId, count: sql<number>`count(*)::int` })
+            .from(schema.answers)
+            .where(
+              inArray(
+                schema.answers.questionId,
+                existing.map((q) => q.id),
+              ),
+            )
+            .groupBy(schema.answers.questionId)
+        : [];
+      // Every answer counts, including a cancelled registration's — those rows
+      // survive until the guest re-registers. This snapshot is good enough to
+      // REJECT with (a stale 409 just asks the organizer to reload); it is NOT
+      // good enough to DELETE with. The apply phase re-reads it under the lock.
+      const answered = new Map(counts.map((c) => [c.questionId, c.count]));
+      const controls = await getQuestionControls();
+      const trim = (options: string[] | null | undefined) => (options ?? []).map((o) => o.trim()).filter(Boolean);
+
+      // ---- validate the whole payload before mutating anything ----------------
+      const seen = new Set<string>();
+      for (const draft of body.questions) {
+        if (!draft.id) continue;
+        if (!existingById.has(draft.id) || seen.has(draft.id)) {
+          return {
+            status: 400,
+            body: { error: "unknown_question", message: "That list doesn't match this event's questions any more — reload the page and try again." },
+          };
+        }
+        seen.add(draft.id);
+      }
+      for (const row of existing) {
+        // A payload of custom rows only would otherwise hide or delete all six
+        // standard rows and cascade away every phone and t-shirt answer.
+        if (row.kind === "standard" && !seen.has(row.id)) {
+          return {
+            status: 400,
+            body: { error: "missing_standard", message: "The standard fields can be switched off but not removed — reload the page and try again." },
+          };
+        }
+      }
+      const customCount = body.questions.filter((d) => !d.id || existingById.get(d.id)?.kind === "custom").length;
+      if (customCount > MAX_CUSTOM_QUESTIONS) {
+        return {
+          status: 400,
+          body: { error: "too_many", message: `That's ${customCount} questions — a signup form carries at most ${MAX_CUSTOM_QUESTIONS}.` },
+        };
+      }
+      for (const draft of body.questions) {
+        const row = draft.id ? existingById.get(draft.id)! : null;
+        if (row?.kind === "standard") {
+          // A standard field's label, type and options are ours, not the
+          // organizer's — only `visible` and position come from the payload. And a
+          // key the super admin disabled club-wide cannot be visible here, whether
+          // this payload is the one switching it on or it was already visible from
+          // before the control was disabled — "off everywhere" would mean nothing
+          // otherwise. (The register handler already consults the global controls
+          // directly, so this isn't the only thing stopping an answer from being
+          // collected for a globally-off field — it's defense in depth, and it also
+          // keeps the organizer's own view of `visible` honest.)
+          if (draft.visible && row.key && !controls[row.key as keyof QuestionControls]) {
+            return {
+              status: 400,
+              body: { error: "globally_off", message: `“${row.label}” is switched off for the whole club — a super admin has to turn it back on first.` },
+            };
+          }
+          continue;
+        }
+        const options = trim(draft.options);
+        if (draft.type === "select" && options.length === 0) {
+          return { status: 400, body: { error: "options", message: `Add at least one option to “${draft.label}”, or change it to short text.` } };
+        }
+        const n = row ? (answered.get(row.id) ?? 0) : 0;
+        if (n > 0 && (row!.type !== draft.type || JSON.stringify(trim(row!.options)) !== JSON.stringify(options))) {
+          return {
+            status: 409,
+            body: {
+              error: "locked",
+              message: `“${row!.label}” already has ${n} answer${n === 1 ? "" : "s"} — you can't change its type or options once people have answered.`,
+            },
+          };
+        }
+      }
+
+      // ---- apply --------------------------------------------------------------
+      await db.transaction(async (tx) => {
+        // The same lock registrations take (createRegistration calls this inside
+        // its own transaction). Everything the apply phase decides is re-read HERE,
+        // inside the lock: the reads above happened before it, and a signup that
+        // commits in between is invisible to them. Delete on a stale zero-answer
+        // count and answers.question_id's ON DELETE CASCADE destroys that guest's
+        // answer with no trace. Rejections may run on the stale snapshot; deletes
+        // may not.
+        await lockEvent(tx, params.id);
+
+        const live = await tx
+          .select()
+          .from(schema.eventQuestions)
+          .where(eq(schema.eventQuestions.eventId, params.id))
+          .orderBy(asc(schema.eventQuestions.sort));
+        const liveById = new Map(live.map((q) => [q.id, q]));
+        const liveCounts = live.length
+          ? await tx
+              .select({ questionId: schema.answers.questionId, count: sql<number>`count(*)::int` })
+              .from(schema.answers)
+              .where(
+                inArray(
+                  schema.answers.questionId,
+                  live.map((q) => q.id),
+                ),
+              )
+              .groupBy(schema.answers.questionId)
+          : [];
+        const liveAnswered = new Map(liveCounts.map((c) => [c.questionId, c.count]));
+
+        for (const [i, draft] of body.questions.entries()) {
+          const row = draft.id ? (liveById.get(draft.id) ?? null) : null;
+          // The row was deleted by a concurrent save between the validation read
+          // and this lock. Do not resurrect it — an id we no longer have is not
+          // ours to re-create.
+          if (draft.id && !row) continue;
+          if (!row) {
+            await tx.insert(schema.eventQuestions).values({
+              eventId: params.id,
+              kind: "custom",
+              key: null,
+              label: draft.label,
+              type: draft.type,
+              options: draft.type === "select" ? trim(draft.options) : null,
+              required: draft.required,
+              visible: draft.visible,
+              sort: i,
+            });
+            continue;
+          }
+          if (row.kind === "standard") {
+            await tx.update(schema.eventQuestions).set({ visible: draft.visible, sort: i }).where(eq(schema.eventQuestions.id, row.id));
+            continue;
+          }
+          await tx
+            .update(schema.eventQuestions)
+            .set({
+              label: draft.label,
+              type: draft.type,
+              options: draft.type === "select" ? trim(draft.options) : null,
+              required: draft.required,
+              visible: draft.visible,
+              sort: i,
+            })
+            .where(eq(schema.eventQuestions.id, row.id));
+        }
+
+        // A custom question the organizer dropped. Deleting cascades its answers,
+        // so that is only safe at zero; otherwise hide it, which keeps the answers
+        // and keeps its CSV column. Retired rows sort after everything live.
+        //
+        // `live` and `liveAnswered`, not `existing` and `answered`: this is the
+        // decision the lock exists to protect, so it reads the state the lock is
+        // holding. `seen` is derived from the payload, so it needs no re-read.
+        let tail = body.questions.length;
+        for (const row of live) {
+          if (row.kind !== "custom" || seen.has(row.id)) continue;
+          if ((liveAnswered.get(row.id) ?? 0) > 0) {
+            await tx.update(schema.eventQuestions).set({ visible: false, sort: tail++ }).where(eq(schema.eventQuestions.id, row.id));
+          } else {
+            await tx.delete(schema.eventQuestions).where(eq(schema.eventQuestions.id, row.id));
+          }
+        }
+      });
+
+      // Hand the refreshed list back so the builder can write the new rows' server
+      // ids into its own state — without them a second save re-creates them.
+      return { status: 200, body: { ok: true, questions: await orgQuestions(params.id) } };
+    },
+
     createEvent: async ({ body, request }) => {
       const ctx = ctxOf(request);
       if (!ctx) return unauthorized;
@@ -1178,6 +1469,7 @@ export const router = s.router(contract, {
           label: q.label,
           type: q.type,
           options: q.options ?? null,
+          required: q.required ?? false,
           visible: true,
           sort: sort++,
         });

@@ -10,7 +10,7 @@ interface AuthState {
 }
 
 const AuthContext = createContext<AuthState>({
-  me: { user: null, admin: null },
+  me: { user: null, admin: null, wallet: { apple: false, google: false } },
   loading: true,
   refresh: async () => {},
 });
@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
-        me: query.data ?? { user: null, admin: null },
+        me: query.data ?? { user: null, admin: null, wallet: { apple: false, google: false } },
         loading: query.isLoading,
         refresh: () => qc.invalidateQueries({ queryKey: ["me"] }),
       }}
